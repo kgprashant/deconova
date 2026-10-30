@@ -193,7 +193,13 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 #identify .spin{width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spn .8s linear infinite}
 @keyframes spn{to{transform:rotate(360deg)}}
 .destdot2{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;background:#C8A96A;box-shadow:0 0 0 3px rgba(0,0,0,.4);pointer-events:none;z-index:2}
-.selbar{margin-top:12px;padding:12px;border:1px solid var(--brass);border-radius:var(--r-control);background:var(--panel)}
+.selbar{position:fixed;left:12px;right:12px;bottom:138px;max-width:520px;margin:0 auto;z-index:60;padding:12px;border:1px solid var(--brass);border-radius:14px;background:var(--panel);box-shadow:0 8px 30px rgba(0,0,0,.55)}
+.selbar[hidden]{display:none}
+.selbar .seg{margin:8px 0}
+.selbar .credit{margin:4px 0 8px}
+.selbar .btn{margin:0}
+body.selopen .gobar{display:none}
+@media (min-width:900px){ .selbar{left:116px;bottom:20px;right:auto;width:440px;margin:0} }
 .selhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .selhead b{font-size:15px}
 @keyframes brkin{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
@@ -600,7 +606,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="hr"></div>
     <a class="btn ghost" id="svDownload" download="deconova.jpg">Download the makeover</a>
     <div style="height:10px"></div>
-    <button class="btn ghost" id="svDelete">Delete this room</button>
+    <button class="btn ghost" id="svDelete">Delete this makeover</button>
   </div>
 </section>
 
@@ -839,6 +845,7 @@ function satOf(h){ const [r,g,b]=hexToRgb(h).map(v=>v/255); const mx=Math.max(r,
 /* ---------------------- navigation ---------------------- */
 function show(name){
   S.screen = name;
+  document.body.classList.toggle('selopen', name==='style' && !!S.selObj); if($('#selbar')) $('#selbar').hidden = !(name==='style' && S.selObj);
   $$('.screen').forEach(s=>s.classList.toggle('on', s.id==='s-'+name));
   $('#nav').classList.toggle('on', !!S.user && name!=='capture');
   $$('#nav button').forEach(b=>b.classList.toggle('sel', b.dataset.go===name));
@@ -1113,7 +1120,8 @@ function listenTilt(){
 }
 
 /* ---------------------- photo accepted ---------------------- */
-function onPhoto(dataUrl){
+function onPhoto(dataUrl, baseId){
+  S.baseId = baseId || ('r'+Date.now());
   shareId=null; if($('#shareOut')) $('#shareOut').innerHTML='';
   S.original = dataUrl; S.versions=[]; S.read=null; S.story=null; S.preTags=[];
   S.wall=null; S.kelvin=3200; S.ev=0; S.mask=null;
@@ -1169,8 +1177,7 @@ function selUI(){
     const d=document.createElement('i'); d.className='destdot2';
     d.style.left=(r.left-wr.left+r.width*S.dest.x/100)+'px'; d.style.top=(r.top-wr.top+r.height*S.dest.y/100)+'px'; w.appendChild(d);
   }
-  const bar=$('#selbar'); const was=bar.hidden; bar.hidden=!S.selObj; if(!S.selObj) return;
-  if(was) setTimeout(()=>bar.scrollIntoView({block:'center',behavior:'smooth'}),60);
+  const bar=$('#selbar'); bar.hidden=!S.selObj; document.body.classList.toggle('selopen',!!S.selObj&&S.screen==='style'); if(!S.selObj) return;
   $('#selTitle').textContent='Selected: '+S.selObj.name;
   $$('#selMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===selMode));
   $('#selRep').hidden=selMode!=='replace';
@@ -1903,18 +1910,30 @@ function buildTags(){
   if(S.kelvin!==3200||S.ev) t.push('Light: adjusted');
   return [...new Set(t)];
 }
+const MAX_VARIANTS=5;
 $('#save').onclick = async ()=>{
   const s=STYLES.find(x=>x.id===S.style);
-  const id='r'+Date.now();
-  const rec={id, style:s.label, pack:(PACKS.find(p=>p.id===S.pack)||{}).label,
-    before:await thumb(S.original,760), after:await thumb(currentUrl(),760),
-    versions:S.versions.length, at:new Date().toISOString(),
+  const id=S.baseId||(S.baseId='r'+Date.now());
+  const v={vid:'m'+Date.now(), style:s.label, pack:(PACKS.find(p=>p.id===S.pack)||{}).label,
+    after:await thumb(currentUrl(),760), versions:S.versions.length, at:new Date().toISOString(),
     wall:S.wall? S.wall[0]:null, kelvin:S.kelvin, ev:S.ev,
     accent:(s.palette.map(p=>p[1]).sort((a,b)=>satOf(b)-satOf(a))[0]),
-    story:S.story, room:(S.read&&S.read.room_type)||'room', tags:buildTags()};
-  const ok=await sset('room:'+id, rec);
-  toast(ok? 'Saved to your cloud with tags.' : 'Saved for this session only — storage is unavailable here.');
-  if(!ok){ (window.__mem=window.__mem||[]).push(rec); }
+    story:S.story, tags:buildTags()};
+  let rec=null; const key='room:'+id;
+  try{ const r=await store.get(K(key)); if(r) rec=JSON.parse(r.value); }catch(e){}
+  if(!rec) rec=(window.__mem||[]).find(x=>x.id===id)||null;
+  if(rec){
+    rec.variants=rec.variants||[{vid:'m0',style:rec.style,pack:rec.pack,after:rec.after,versions:rec.versions,at:rec.at,wall:rec.wall,kelvin:rec.kelvin,ev:rec.ev,accent:rec.accent,story:rec.story,tags:rec.tags||[]}];
+    if(rec.variants.length>=MAX_VARIANTS){ toast('This photo already has 5 makeovers saved. Delete one in Cloud to add another.'); return; }
+  } else {
+    rec={id, before:await thumb(S.original,760), room:(S.read&&S.read.room_type)||'room', variants:[]};
+  }
+  rec.variants.push(v);
+  Object.assign(rec,{style:v.style,pack:v.pack,after:v.after,versions:v.versions,at:v.at,wall:v.wall,kelvin:v.kelvin,ev:v.ev,accent:v.accent,story:v.story,
+    tags:[...new Set(rec.variants.flatMap(x=>x.tags||[]))]});
+  const ok=await sset(key, rec);
+  if(!ok){ window.__mem=(window.__mem||[]).filter(x=>x.id!==id); window.__mem.push(rec); }
+  toast(ok? `Saved to your cloud (${rec.variants.length} of ${MAX_VARIANTS} makeovers for this photo).` : 'Saved for this session only — storage is unavailable here.');
   show('gallery'); drawGallery();
 };
 async function uploadPhotos(files){
@@ -1959,7 +1978,7 @@ async function drawGallery(){
   body.innerHTML=photoHtml+(recs.length?'<div class="grouphead">Makeovers</div>'+filterHtml:'')+`<div class="masonry">${shown.map((r,i)=>`
     <div class="gitem" data-open="${r.id}" style="animation-delay:${i*55}ms">
       <div class="ba"><img src="${r.before||r.after}" alt="Before"><img src="${r.after}" alt="${r.style} makeover"></div>
-      <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>
+      <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>${(r.variants&&r.variants.length>1)?`<span class="tag" style="left:50%;transform:translateX(-50%);top:auto;bottom:44px;color:#C8A96A">${r.variants.length} of 5 makeovers</span>`:''}
       <button class="del" data-k="${r.k||''}" data-id="${r.id}" aria-label="Delete">×</button>
       <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${(r.tags&&r.tags.length)? r.tags.filter(t=>!/^Style:/.test(t)).slice(0,2).join(' · ')||(r.room||'room') : (r.room||'room')+(r.wall?' · '+r.wall+' walls':'')}</span></div>
     </div>`).join('')}</div>
@@ -1980,9 +1999,13 @@ async function drawGallery(){
 $('#newFromGallery').onclick=()=>$('#upl').click();
 
 /* ---------------------- saved room, read only ---------------------- */
-let svCur=null;
-function openSaved(r){
+let svCur=null, svVi=0;
+function openSaved(r, vi){
   svCur=r;
+  const vars=r.variants&&r.variants.length? r.variants : [{vid:'m0',style:r.style,pack:r.pack,after:r.after,at:r.at,wall:r.wall,kelvin:r.kelvin,ev:r.ev,accent:r.accent,story:r.story,tags:r.tags||[]}];
+  if(vi==null||vi>=vars.length) vi=vars.length-1;
+  svVi=vi; const V=vars[vi];
+  r=Object.assign({},r,V,{before:r.before});
   $('#svTitle').textContent=r.style;
   $('#svSub').textContent=[r.room, r.pack&&r.pack!=='No one in particular'?r.pack:null,
     r.wall?r.wall+' walls':null, new Date(r.at).toLocaleDateString()].filter(Boolean).join(' · ');
@@ -1997,6 +2020,10 @@ function openSaved(r){
   $('#svDownload').setAttribute('download', (r.style||'deconova').toLowerCase().replace(/\s+/g,'-')+'.jpg');
   { let tg=$('#svTags'); if(!tg){ tg=document.createElement('div'); tg.id='svTags'; tg.className='chips'; tg.style.cssText='flex-wrap:wrap;margin:10px 0'; $('#svStory').parentNode.insertBefore(tg,$('#svStory')); }
     tg.innerHTML=(r.tags||[]).map(t=>`<span class="chip sel" style="font-size:12px;padding:5px 10px">${t}</span>`).join(''); }
+  { let vb=$('#svVars'); if(!vb){ vb=document.createElement('div'); vb.id='svVars'; vb.className='chips'; vb.style.cssText='flex-wrap:wrap;margin:10px 0'; $('#svStory').parentNode.insertBefore(vb,$('#svStory').parentNode.firstChild); }
+    vb.innerHTML=vars.map((x,i)=>`<button class="chip${i===vi?' sel':''}" data-vi="${i}">${i+1}. ${x.style}</button>`).join('')+(vars.length<5?`<button class="chip" id="svNew">+ New makeover (${vars.length} of 5)</button>`:'<span class="credit" style="align-self:center">5 of 5 saved</span>');
+    $$('#svVars [data-vi]').forEach(b=>b.onclick=()=>openSaved(svCur, +b.dataset.vi));
+    const nb=$('#svNew'); if(nb) nb.onclick=()=>onPhoto(svCur.before, svCur.id); }
   renderStoryInto($('#svStory'), r.story);
   svSet(50); show('saved');
   const sh=$('#svShine'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
@@ -2037,9 +2064,16 @@ function svWipe(){
 $('#svBack').onclick=()=>{ show('gallery'); drawGallery(); };
 let svArm=false;
 $('#svDelete').onclick=async ()=>{
-  if(!svArm){ svArm=true; $('#svDelete').textContent='Tap again to delete this room';
-    setTimeout(()=>{ svArm=false; $('#svDelete').textContent='Delete this room'; },4000); return; }
+  if(!svArm){ svArm=true; $('#svDelete').textContent='Tap again to delete';
+    setTimeout(()=>{ svArm=false; $('#svDelete').textContent='Delete this makeover'; },4000); return; }
   svArm=false; $('#svDelete').textContent='Delete this room';
+  const vs=svCur.variants;
+  if(vs && vs.length>1){
+    vs.splice(svVi,1); const L=vs[vs.length-1];
+    Object.assign(svCur,{style:L.style,pack:L.pack,after:L.after,at:L.at,wall:L.wall,kelvin:L.kelvin,ev:L.ev,accent:L.accent,story:L.story,tags:[...new Set(vs.flatMap(x=>x.tags||[]))]});
+    const rec={...svCur}; delete rec.k; await sset('room:'+svCur.id, rec);
+    toast('That makeover was deleted.'); openSaved(svCur); return;
+  }
   await sdel('room:'+svCur.id);
   window.__mem=(window.__mem||[]).filter(x=>x.id!==svCur.id);
   toast('Deleted. The photo is gone too.'); show('gallery'); drawGallery();
