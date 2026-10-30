@@ -179,10 +179,23 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .destdot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;background:var(--brass);box-shadow:0 0 0 3px rgba(0,0,0,.4);pointer-events:none}
 .seg{display:flex;gap:8px;margin:10px 0}
 .seg .chip{flex:1;text-align:center}
-.brk{position:absolute;border:1.5px solid var(--signal-brk,#fff);border-radius:3px;
+.brk{cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;position:absolute;border:1.5px solid var(--signal-brk,#fff);border-radius:3px;transition:border-color .15s,background .15s;
   opacity:0;animation:brkin .5s var(--ease) forwards}
 .brk span{position:absolute;top:-9px;left:6px;background:#fff;color:#16171A;font-size:10px;
   font-weight:600;padding:1px 6px;border-radius:2px;white-space:nowrap}
+#readwrap .brk span{pointer-events:none}
+.brk.sel{border-color:#C8A96A;border-width:2.5px;background:rgba(200,169,106,.25)}
+.brk.sel span{background:#C8A96A}
+#identify{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;
+  background:rgba(18,17,16,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-size:12px;
+  font-weight:500;padding:6px 12px;border-radius:99px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.5);z-index:3}
+#identify[hidden]{display:none}
+#identify .spin{width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spn .8s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
+.destdot2{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;background:#C8A96A;box-shadow:0 0 0 3px rgba(0,0,0,.4);pointer-events:none;z-index:2}
+.selbar{margin-top:12px;padding:12px;border:1px solid var(--brass);border-radius:var(--r-control);background:var(--panel)}
+.selhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.selhead b{font-size:15px}
 @keyframes brkin{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
 
 /* ---------- styles grid ---------- */
@@ -428,8 +441,15 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div class="pad" style="padding-top:8px">
    <div class="dgrid">
     <div class="dleft">
-    <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"></div>
+    <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"><div id="identify" hidden><i class="spin"></i><span>Identifying objects…</span></div></div>
     <p class="credit" id="readnote" style="margin-top:10px">Reading the room…</p>
+    <div class="selbar" id="selbar" hidden>
+      <div class="selhead"><b id="selTitle"></b><button class="back" id="selClear" type="button">Change object</button></div>
+      <div class="seg" id="selMode"><button type="button" class="chip sel" data-m="remove">Remove</button><button type="button" class="chip" data-m="replace">Replace</button><button type="button" class="chip" data-m="move">Move</button></div>
+      <input type="text" id="selRep" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
+      <p class="credit" id="selHint"></p>
+      <button class="btn" id="selGo" type="button">Remove it — 1 credit</button>
+    </div>
     </div>
     <div class="dright">
     <div class="grouphead" style="margin-top:20px">Who lives here</div>
@@ -1122,6 +1142,7 @@ function sampleRegions(url){
 
 /* ---------------------- room read (real vision call) ---------------------- */
 async function roomRead(dataUrl){
+  $('#identify').hidden=false; S.selObj=null; S.dest=null; selUI();
   const fallback = {room_type:'living room', detected:['sofa','window','coffee table','floor','wall'],
     light:{sources:2,direction:'side',quality:'soft daylight'}, estimated_ceiling_m:2.7};
   try{
@@ -1130,16 +1151,72 @@ async function roomRead(dataUrl){
     S.read = d.result;
     S.read.objects=(Array.isArray(S.read.objects)?S.read.objects:[]).map(o=>{ const b=Array.isArray(o.box)?o.box.map(Number):[]; if(!o||!o.name||b.length!==4||b.some(x=>!isFinite(x))) return null; let [x,y,w,h]=b.map(v=>Math.max(0,Math.min(100,v))); if(w<3||h<3) return null; w=Math.min(w,100-x); h=Math.min(h,100-y); return {name:String(o.name).slice(0,24),box:[x,y,w,h]}; }).filter(Boolean).slice(0,8);
   }catch(e){ S.read = fallback; S.read.objects=[]; }
+  $('#identify').hidden=true;
   paintBrackets();
 }
+let selMode='remove';
+function setDest2(ev){
+  const r=$('#readimg').getBoundingClientRect();
+  S.dest={x:Math.max(2,Math.min(98,Math.round((ev.clientX-r.left)/r.width*100))), y:Math.max(2,Math.min(98,Math.round((ev.clientY-r.top)/r.height*100)))};
+  selUI();
+}
+function selUI(){
+  const w=$('#readwrap'); if(!w) return;
+  $$('#readwrap .brk').forEach(b=>b.classList.toggle('sel', !!S.selObj && (S.read&&S.read.objects||[])[b.dataset.i]===S.selObj));
+  $$('#readwrap .destdot2').forEach(x=>x.remove());
+  if(S.dest && S.selObj && selMode==='move'){
+    const im=$('#readimg'), wr=w.getBoundingClientRect(), r=im.getBoundingClientRect();
+    const d=document.createElement('i'); d.className='destdot2';
+    d.style.left=(r.left-wr.left+r.width*S.dest.x/100)+'px'; d.style.top=(r.top-wr.top+r.height*S.dest.y/100)+'px'; w.appendChild(d);
+  }
+  const bar=$('#selbar'); const was=bar.hidden; bar.hidden=!S.selObj; if(!S.selObj) return;
+  if(was) setTimeout(()=>bar.scrollIntoView({block:'center',behavior:'smooth'}),60);
+  $('#selTitle').textContent='Selected: '+S.selObj.name;
+  $$('#selMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===selMode));
+  $('#selRep').hidden=selMode!=='replace';
+  $('#selGo').textContent=({remove:'Remove it — 1 credit',replace:'Replace it — 1 credit',move:'Move it — 1 credit'})[selMode];
+  $('#selHint').textContent = selMode==='move' ? (S.dest?'Destination marked. Tap the photo again to change it.':'Tap the photo where it should go.')
+    : selMode==='replace' ? 'Type what should take its place.' : 'It will be erased and the wall or floor filled in.';
+}
+$$('#selMode .chip').forEach(b=>b.onclick=()=>{ selMode=b.dataset.m; S.dest=null; selUI(); });
+$('#selClear').onclick=()=>{ S.selObj=null; S.dest=null; selUI(); };
+$('#readwrap').addEventListener('click',ev=>{ if(selMode==='move' && S.selObj && !ev.target.closest('.brk')) setDest2(ev); });
+async function preEdit(mode, extra, label){
+  if(S.credits<1){ toast('Out of credits.'); return; }
+  if(!REAL){ toast('Edits need the image model. Connect it first — see the README.'); return; }
+  runLoader(['Editing your room','Keeping walls, windows and camera angle']);
+  try{
+    const d=await callEdge('generate',{mode, image:S.original.split(',')[1], style_id:null, pack_id:S.pack, decor:[], room:S.read, request_id:rid(), ...extra});
+    if(typeof (d&&d.credits_left)==='number'){ S.credits=d.credits_left; await sset('credits:'+S.user,S.credits); }
+    if(!d || !d.ok){ toast((d&&d.message)||'The render did not finish.'); return; }
+    const url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original);
+    S.original=url; S.versions=[]; S.selObj=null; S.dest=null;
+    $('#readimg').src=url; sampleRegions(url);
+    $$('#readwrap .brk').forEach(b=>b.remove()); selUI(); buildStyleUI();
+    toast(label+' done. Pick a style to continue.');
+    roomRead(url);
+  }catch(e){ toast(e.message||'The render did not finish.'); }
+  finally{ stopLoader(); }
+}
+$('#selGo').onclick=()=>{
+  const o=S.selObj; if(!o) return;
+  const t='the '+o.name, loc=locText(o);
+  if(selMode==='replace'){ const r=$('#selRep').value.trim(); if(!r){ toast('Say what to replace it with.'); return; } preEdit('replace',{target:t,replacement:r,loc},'Replaced '+o.name); }
+  else if(selMode==='move'){ if(!S.dest){ toast('Tap the photo where it should go.'); return; }
+    preEdit('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Moved '+o.name); }
+  else preEdit('remove',{target:t,loc},'Removed '+o.name);
+};
 function paintBrackets(){
   const w=$('#readwrap'); $$('#readwrap .brk').forEach(b=>b.remove());
   (S.read.objects||[]).forEach((o,i)=>{
     const [l,t,ww,hh]=o.box;
     const d=document.createElement('div'); d.className='brk';
     d.style.cssText=`left:${l}%;top:${t}%;width:${ww}%;height:${hh}%;animation-delay:${i*130}ms`;
-    d.innerHTML='<span>'+o.name+'</span>'; w.appendChild(d);
+    d.innerHTML='<span>'+o.name+'</span>'; d.dataset.i=i;
+    d.onclick=ev=>{ ev.stopPropagation(); if(selMode==='move' && S.selObj){ setDest2(ev); return; } S.selObj=o; S.dest=null; selUI(); };
+    w.appendChild(d);
   });
+  selUI();
   const L=S.read.light||{};
   $('#readnote').textContent = `${S.read.room_type||'room'} · ${L.sources??'—'} light sources, ${L.quality||'mixed light'} · ceiling about ${S.read.estimated_ceiling_m||'2.7'} m`;
 }
