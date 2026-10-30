@@ -1290,7 +1290,7 @@ $('#vastuGo').onclick=async ()=>{
 };
 let shareId=null, shareArm=0;
 async function showVotes(){
-  const {data}=await sb.rpc('get_share',{p_id:shareId});
+  const {data}=await sb.rpc('dn_get_share',{p_id:shareId});
   if(!data){ $('#shareOut').innerHTML='<p class="soft">This share has ended.</p>'; shareId=null; return; }
   const tally=data.tally||{}, names=(data.concepts||[]).map(c=>c.label);
   const total=Object.values(tally).reduce((a,b)=>a+b,0);
@@ -1304,7 +1304,7 @@ async function showVotes(){
   $('#shStop').onclick=async ()=>{
     const b=$('#shStop');
     if(Date.now()-shareArm>4000){ shareArm=Date.now(); b.textContent='Tap again to stop sharing'; return; }
-    await sb.from('shares').delete().eq('id',shareId); shareId=null; $('#shareOut').innerHTML=''; toast('Sharing stopped. The link no longer works.');
+    await sb.from('dn_shares').delete().eq('id',shareId); shareId=null; $('#shareOut').innerHTML=''; toast('Sharing stopped. The link no longer works.');
   };
 }
 $('#shareGo').onclick=async ()=>{
@@ -1315,7 +1315,7 @@ $('#shareGo').onclick=async ()=>{
     const s=STYLES.find(x=>x.id===S.style);
     const concepts=[{label:'Original',img:await thumb(S.original,760)}];
     for(const v of S.versions.slice(-3)) concepts.push({label:v.label, img:await thumb(v.url,760)});
-    const {data,error}=await sb.from('shares').insert({title:s.label+' makeover', concepts}).select('id').single();
+    const {data,error}=await sb.from('dn_shares').insert({title:s.label+' makeover', concepts}).select('id').single();
     if(error||!data) throw error||new Error('x');
     shareId=data.id; await showVotes(); toast('Link ready. Photos in it are only visible to people with the link.');
   }catch(e){ toast('Could not create the link. Try again.'); }

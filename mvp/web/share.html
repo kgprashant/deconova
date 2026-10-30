@@ -84,14 +84,14 @@ function draw(){
   app.appendChild(el('p',{className:'fine',textContent:'You can change your vote any time while the link is active. No account or name is needed.'}));
 }
 async function vote(){
-  const {data:d,error}=await sb.rpc('cast_vote',{p_share:id,p_voter:voter,p_concept:pick});
+  const {data:d,error}=await sb.rpc('dn_cast_vote',{p_share:id,p_voter:voter,p_concept:pick});
   if(error||!d){ say('This link has ended or is full.'); return; }
   data=d; mine=pick; try{ localStorage.setItem('dn:vote:'+id,String(pick)); }catch(e){}
   draw();
 }
 (async()=>{
   if(!sb||!id){ say('This link is not working. Ask for a new one.'); return; }
-  const {data:d,error}=await sb.rpc('get_share',{p_id:id});
+  const {data:d,error}=await sb.rpc('dn_get_share',{p_id:id});
   if(error||!d){ say('This link has expired or was removed.'); return; }
   data=d; try{ mine=parseInt(localStorage.getItem('dn:vote:'+id),10)||null; if(mine) pick=mine; }catch(e){}
   draw();
