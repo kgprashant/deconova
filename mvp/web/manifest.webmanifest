@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "DecoNova",
+  "short_name": "DecoNova",
+  "description": "Luxury Living, Intelligently Designed. Photograph a room and see it redesigned for the people who live in it.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121110",
+  "theme_color": "#121110",
+  "categories": ["lifestyle", "productivity"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "shot-1.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Sign in" },
+    { "src": "shot-2.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "Drag to compare before and after" }
+  ]
+}

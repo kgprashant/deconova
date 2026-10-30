@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DecoNova: which room do you like?</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121110">
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;1,6..96,400&family=Hanken+Grotesk:wght@400;500;600&display=swap">
+<style>
+:root{--ground:#121110;--panel:#1C1B19;--ink:#F2EEE7;--soft:#9A9389;--line:rgba(242,238,231,.14);--brass:#C8A96A;
+  --display:'Bodoni Moda',Georgia,serif;--ui:'Hanken Grotesk','Helvetica Neue',Arial,sans-serif}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.5;min-height:100vh;
+  padding:max(18px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
+.mark{font-family:var(--display);font-size:13px;letter-spacing:.42em;opacity:.72;margin-bottom:22px}
+h1{font-family:var(--display);font-weight:400;font-size:28px;line-height:1.06;letter-spacing:-.012em}
+h1:after{content:"";display:block;width:34px;height:1px;background:var(--brass);margin:10px 0 6px}
+.sub{color:var(--soft);margin-bottom:16px}
+#rev{position:relative;border-radius:12px;overflow:hidden;background:#0B0A09;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+#rev img{display:block;width:100%;height:auto;pointer-events:none}
+#top{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}
+#top img{width:100%;height:100%;object-fit:cover}
+#seam{position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--brass);box-shadow:0 0 10px rgba(200,169,106,.55)}
+#handle{position:absolute;top:50%;left:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;background:var(--ink);color:#121110;border:0;font-size:16px;cursor:ew-resize}
+#handle:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+.tag{position:absolute;bottom:10px;padding:4px 9px;border-radius:2px;font-size:11.5px;font-weight:600;background:rgba(11,10,9,.62);letter-spacing:.06em;transition:opacity .2s}
+#tb{left:10px}#ta{right:10px}
+.row{display:flex;gap:8px;overflow-x:auto;margin:14px 0}
+.chip{flex:none;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:99px;padding:9px 15px;font:inherit;font-size:14px;cursor:pointer}
+.chip.sel{background:var(--brass);color:#121110;border-color:var(--brass)}
+.btn{display:block;width:100%;padding:15px;border-radius:10px;border:0;background:var(--brass);color:#121110;font:inherit;font-weight:600;font-size:15px;cursor:pointer}
+.btn[disabled]{opacity:.5}
+.tally{margin-top:18px}
+.bar{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.bar b{font-weight:600}.fill{height:3px;background:var(--brass);margin-top:5px;border-radius:2px}
+.msg{padding:40px 0;color:var(--soft)}
+.fine{margin-top:18px;font-size:12.5px;color:var(--soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="mark">DECONOVA</div>
+<div id="app"><p class="msg">Loading…</p></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const $=s=>document.querySelector(s), CFG=window.DECONOVA_CONFIG||{};
+const app=$('#app');
+const say=t=>{ app.innerHTML=''; const p=document.createElement('p'); p.className='msg'; p.textContent=t; app.appendChild(p); };
+const id=new URLSearchParams(location.search).get('id');
+const sb=(CFG.SUPABASE_URL&&CFG.SUPABASE_ANON_KEY&&window.supabase)?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{auth:{persistSession:false}}):null;
+let voter; try{ voter=localStorage.getItem('dn:voter'); if(!voter){ voter=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now()); localStorage.setItem('dn:voter',voter);} }catch(e){ voter=String(Math.random()).slice(2)+Date.now(); }
+let data=null, pick=1, mine=null, pos=50;
+
+function el(tag,props,kids){ const e=document.createElement(tag); Object.assign(e,props||{}); (kids||[]).forEach(k=>e.appendChild(typeof k==='string'?document.createTextNode(k):k)); return e; }
+function draw(){
+  const c=data.concepts, total=Object.values(data.tally||{}).reduce((a,b)=>a+b,0);
+  app.innerHTML='';
+  app.appendChild(el('h1',{textContent:data.title}));
+  app.appendChild(el('p',{className:'sub',textContent:'Drag to compare with the original, then pick your favourite.'}));
+  const rev=el('div',{id:'rev'});
+  const base=el('img',{alt:'Makeover',src:c[pick].img});
+  const top=el('div',{id:'top'},[el('img',{alt:'Original room',src:c[0].img})]);
+  const seam=el('div',{id:'seam'}), h=el('button',{id:'handle',textContent:'↔',ariaLabel:'Drag to compare'});
+  const tb=el('span',{className:'tag',id:'tb',textContent:'BEFORE'}), ta=el('span',{className:'tag',id:'ta',textContent:String(c[pick].label).toUpperCase().slice(0,22)});
+  [base,top,seam,h,tb,ta].forEach(x=>rev.appendChild(x)); app.appendChild(rev);
+  const set=p=>{ pos=Math.max(0,Math.min(100,p)); top.style.clipPath=`inset(0 ${100-pos}% 0 0)`; seam.style.left=pos+'%'; h.style.left=pos+'%'; tb.style.opacity=pos<18?.15:1; ta.style.opacity=pos>82?.15:1; };
+  set(pos);
+  const move=e=>{ const r=rev.getBoundingClientRect(); set((e.clientX-r.left)/r.width*100); };
+  rev.addEventListener('pointerdown',e=>{ rev.setPointerCapture(e.pointerId); move(e); rev.onpointermove=move; });
+  rev.addEventListener('pointerup',()=>{ rev.onpointermove=null; });
+  h.addEventListener('keydown',e=>{ if(e.key==='ArrowLeft') set(pos-5); if(e.key==='ArrowRight') set(pos+5); });
+  const row=el('div',{className:'row'});
+  c.slice(1).forEach((x,i)=>row.appendChild(el('button',{className:'chip'+(pick===i+1?' sel':''),textContent:x.label,onclick:()=>{ pick=i+1; draw(); }})));
+  app.appendChild(row);
+  app.appendChild(el('button',{className:'btn',textContent:mine===pick?'Your vote is for this one':'I pick this one',disabled:mine===pick,onclick:vote}));
+  const t=el('div',{className:'tally'});
+  c.slice(1).forEach((x,i)=>{ const n=(data.tally||{})[i+1]||0;
+    const b=el('div',{className:'bar'},[el('span',{textContent:x.label}),el('b',{textContent:n+(n===1?' vote':' votes')})]);
+    const w=el('div',{className:'fill'}); w.style.width=total?Math.round(n/total*100)+'%':'0%'; const box=el('div',{},[b,w]); t.appendChild(box); });
+  app.appendChild(t);
+  app.appendChild(el('p',{className:'fine',textContent:'You can change your vote any time while the link is active. No account or name is needed.'}));
+}
+async function vote(){
+  const {data:d,error}=await sb.rpc('cast_vote',{p_share:id,p_voter:voter,p_concept:pick});
+  if(error||!d){ say('This link has ended or is full.'); return; }
+  data=d; mine=pick; try{ localStorage.setItem('dn:vote:'+id,String(pick)); }catch(e){}
+  draw();
+}
+(async()=>{
+  if(!sb||!id){ say('This link is not working. Ask for a new one.'); return; }
+  const {data:d,error}=await sb.rpc('get_share',{p_id:id});
+  if(error||!d){ say('This link has expired or was removed.'); return; }
+  data=d; try{ mine=parseInt(localStorage.getItem('dn:vote:'+id),10)||null; if(mine) pick=mine; }catch(e){}
+  draw();
+})();
+</script>
+</body>
+</html>
