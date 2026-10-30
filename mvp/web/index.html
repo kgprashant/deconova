@@ -335,11 +335,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
         <div class="level" id="level">Checking level</div>
       </div>
       <div class="frameline"></div>
-    </div>
-    <div id="zoombar" style="display:none;align-items:center;gap:10px;margin-top:12px">
-      <button class="btn ghost" id="zoomWide" style="display:none;width:auto;padding:6px 12px;min-width:0">0.5×</button>
-      <input type="range" id="zoom" min="1" max="4" step="0.05" value="1" style="flex:1" aria-label="Zoom">
-      <span id="zoomv" style="min-width:44px;text-align:right;font-size:13px">1.0×</span>
+      <div id="zoombar" style="display:none;position:absolute;left:10px;right:10px;bottom:10px;z-index:5;align-items:center;gap:10px;padding:8px 12px;border-radius:999px;background:rgba(0,0,0,.45);backdrop-filter:blur(6px)">
+        <button id="zoomWide" style="display:none;background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:999px;padding:5px 10px;font-size:13px">0.5×</button>
+        <input type="range" id="zoom" min="1" max="4" step="0.05" value="1" style="flex:1;accent-color:#C9A96A" aria-label="Zoom">
+        <span id="zoomv" style="min-width:42px;text-align:right;font-size:13px;color:#fff">1.0×</span>
+      </div>
     </div>
     <div style="height:16px"></div>
     <button class="btn" id="shoot">Take the photo</button>
@@ -819,8 +819,10 @@ async function startCapture(){
   show('capture');
   $('#camnote').textContent='';
   try{
-    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}}, audio:false});
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1440}}, audio:false});
     $('#cam').srcObject = stream; $('#shoot').disabled=false; setupZoom();
+    const fit=()=>{ const v=$('#cam'); if(v.videoWidth&&v.videoHeight) $('#camwrap').style.aspectRatio=v.videoWidth+'/'+v.videoHeight; };
+    $('#cam').onloadedmetadata=fit; fit();
   }catch(e){
     $('#camnote').textContent = 'No camera here — use “Choose from photos”.';
     $('#shoot').disabled = true;
@@ -839,7 +841,7 @@ function setupZoom(){
   sl.min=zoomMin; sl.max=zoomMax; sl.step=0.05;
   $('#zoomWide').style.display = (zoomMode==='hw' && zoomMin<1) ? 'inline-block' : 'none';
   bar.style.display='flex';
-  applyZoom(1<zoomMin?zoomMin:1);
+  applyZoom(zoomMin);
 }
 function applyZoom(z){
   zoomVal=Math.max(zoomMin,Math.min(zoomMax,z));
@@ -853,7 +855,7 @@ $('#zoomWide').onclick = ()=> applyZoom(zoomVal<=zoomMin+0.01 ? 1 : zoomMin);
 (function(){
   const w=$('#camwrap'), pts=new Map(); let d0=0, z0=1;
   const dist=()=>{ const a=[...pts.values()]; return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); };
-  w.addEventListener('pointerdown',e=>{ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2){ d0=dist(); z0=zoomVal; } });
+  w.addEventListener('pointerdown',e=>{ if(e.target.closest('#zoombar')) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2){ d0=dist(); z0=zoomVal; } });
   w.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2 && d0>0) applyZoom(z0*dist()/d0); });
   const up=e=>{ pts.delete(e.pointerId); d0=0; };
   w.addEventListener('pointerup',up); w.addEventListener('pointercancel',up);
