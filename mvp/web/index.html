@@ -143,7 +143,8 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .ring i{width:32px;height:32px;border-radius:50%;background:var(--brass);display:block}
 
 /* ---------- capture ---------- */
-#camwrap{position:relative;background:#000;aspect-ratio:3/4;overflow:hidden;border-radius:14px}
+#camwrap{position:relative;background:#000;aspect-ratio:3/4;overflow:hidden;border-radius:14px;touch-action:none}
+#cam{width:100%;height:100%;object-fit:cover;transform-origin:center center}
 #cam{width:100%;height:100%;object-fit:cover;display:block}
 .guide{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;
   justify-content:space-between;padding:14px}
@@ -334,6 +335,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
         <div class="level" id="level">Checking level</div>
       </div>
       <div class="frameline"></div>
+    </div>
+    <div id="zoombar" style="display:none;align-items:center;gap:10px;margin-top:12px">
+      <button class="btn ghost" id="zoomWide" style="display:none;width:auto;padding:6px 12px;min-width:0">0.5×</button>
+      <input type="range" id="zoom" min="1" max="4" step="0.05" value="1" style="flex:1" aria-label="Zoom">
+      <span id="zoomv" style="min-width:44px;text-align:right;font-size:13px">1.0×</span>
     </div>
     <div style="height:16px"></div>
     <button class="btn" id="shoot">Take the photo</button>
@@ -814,7 +820,7 @@ async function startCapture(){
   $('#camnote').textContent='';
   try{
     stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920}}, audio:false});
-    $('#cam').srcObject = stream; $('#shoot').disabled=false;
+    $('#cam').srcObject = stream; $('#shoot').disabled=false; setupZoom();
   }catch(e){
     $('#camnote').textContent = 'No camera here — use “Choose from photos”.';
     $('#shoot').disabled = true;
@@ -822,6 +828,36 @@ async function startCapture(){
   }
   listenTilt();
 }
+/* zoom: hardware (incl. wide lens) when the browser exposes it, otherwise digital */
+let zoomMode='none', zoomVal=1, zoomMin=1, zoomMax=4;
+function setupZoom(){
+  const track=stream && stream.getVideoTracks()[0];
+  const caps=(track && track.getCapabilities)? track.getCapabilities() : {};
+  const sl=$('#zoom'), bar=$('#zoombar');
+  if(caps.zoom && caps.zoom.max>caps.zoom.min){ zoomMode='hw'; zoomMin=caps.zoom.min; zoomMax=Math.min(caps.zoom.max,8); }
+  else { zoomMode='digital'; zoomMin=1; zoomMax=4; }
+  sl.min=zoomMin; sl.max=zoomMax; sl.step=0.05;
+  $('#zoomWide').style.display = (zoomMode==='hw' && zoomMin<1) ? 'inline-block' : 'none';
+  bar.style.display='flex';
+  applyZoom(1<zoomMin?zoomMin:1);
+}
+function applyZoom(z){
+  zoomVal=Math.max(zoomMin,Math.min(zoomMax,z));
+  $('#zoom').value=zoomVal; $('#zoomv').textContent=zoomVal.toFixed(1)+'×';
+  const track=stream && stream.getVideoTracks()[0];
+  if(zoomMode==='hw' && track){ track.applyConstraints({advanced:[{zoom:zoomVal}]}).catch(()=>{}); $('#cam').style.transform=''; }
+  else { $('#cam').style.transform='scale('+zoomVal+')'; }
+}
+$('#zoom').oninput = e=> applyZoom(parseFloat(e.target.value));
+$('#zoomWide').onclick = ()=> applyZoom(zoomVal<=zoomMin+0.01 ? 1 : zoomMin);
+(function(){
+  const w=$('#camwrap'), pts=new Map(); let d0=0, z0=1;
+  const dist=()=>{ const a=[...pts.values()]; return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); };
+  w.addEventListener('pointerdown',e=>{ pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2){ d0=dist(); z0=zoomVal; } });
+  w.addEventListener('pointermove',e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY}); if(pts.size===2 && d0>0) applyZoom(z0*dist()/d0); });
+  const up=e=>{ pts.delete(e.pointerId); d0=0; };
+  w.addEventListener('pointerup',up); w.addEventListener('pointercancel',up);
+})();
 function stopCam(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
 $('#capCancel').onclick = ()=>{ stopCam(); show(S.versions.length?'gallery':'gallery'); drawGallery(); };
 $('#pickBtn').onclick = ()=> $('#pick').click();
@@ -831,7 +867,9 @@ $('#shoot').onclick = ()=>{
   const c=document.createElement('canvas');
   const scale = 1280/Math.max(v.videoWidth,v.videoHeight);
   c.width=Math.round(v.videoWidth*Math.min(1,scale)); c.height=Math.round(v.videoHeight*Math.min(1,scale));
-  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  if(zoomMode==='digital' && zoomVal>1){ const sw=v.videoWidth/zoomVal, sh=v.videoHeight/zoomVal;
+    c.getContext('2d').drawImage(v,(v.videoWidth-sw)/2,(v.videoHeight-sh)/2,sw,sh,0,0,c.width,c.height); }
+  else c.getContext('2d').drawImage(v,0,0,c.width,c.height);
   stopCam();
   onPhoto(c.toDataURL('image/jpeg',0.86));
 };
