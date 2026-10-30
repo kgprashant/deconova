@@ -339,12 +339,12 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     </div>
     <div>
       <div class="field">
-        <input type="email" id="email" placeholder="Your email" autocomplete="email" aria-label="Email address">
+        <input type="text" inputmode="email" id="email" placeholder="Email or mobile number" autocomplete="username" aria-label="Email or mobile number" autocapitalize="none">
       </div>
       <div class="field" style="margin-top:14px"><input type="password" id="pass" placeholder="Password (min 6 characters)" autocomplete="current-password" aria-label="Password"></div>
       <div class="field" id="phonefield" style="margin-top:14px" hidden><input type="tel" id="phone" placeholder="Mobile number, e.g. +91 98765 43210" autocomplete="tel" aria-label="Mobile number"></div>
       <button class="enter" id="signin" style="margin-top:18px">Sign in</button>
-      <p class="quiet" style="margin:10px 0 0"><a href="#" id="modeSwitch" style="text-decoration:underline">New here? Create an account</a></p>
+      <p class="quiet" style="margin:10px 0 0"><a href="#" id="forgot" style="text-decoration:underline">Forgot password?</a> &nbsp;·&nbsp; <a href="#" id="modeSwitch" style="text-decoration:underline">New here? Create an account</a></p>
       <button class="enter" id="google" hidden style="margin-top:10px">Continue with Google</button>
       <p class="quiet">Your rooms stay yours. <a href="privacy.html" style="text-decoration:underline">Privacy</a></p>
     </div>
@@ -823,7 +823,7 @@ async function enter(email){
 let signupMode=false;
 function cleanPhone(v){ const d=v.replace(/[^0-9]/g,''); if(d.length<10||d.length>15) return null; return (v.trim().startsWith('+')?'+':(d.length===10?'+91':'+'))+d; }
 $('#modeSwitch').onclick=(e)=>{ e.preventDefault(); signupMode=!signupMode;
-  $('#phonefield').hidden=!signupMode; $('#signin').textContent=signupMode?'Create account':'Sign in';
+  $('#phonefield').hidden=!signupMode; $('#forgot').hidden=signupMode; $('#signin').textContent=signupMode?'Create account':'Sign in';
   $('#modeSwitch').textContent=signupMode?'Already have an account? Sign in':'New here? Create an account';
   $('#pass').autocomplete=signupMode?'new-password':'current-password'; };
 async function needPhone(){
@@ -833,7 +833,7 @@ async function needPhone(){
 function askPhone(){
   return new Promise(res=>{
     show('auth'); $('#phonefield').hidden=false; $('#email').parentNode.hidden=true; $('#pass').parentNode.hidden=true;
-    $('#modeSwitch').hidden=true; $('#google').hidden=true; $('#signin').textContent='Save and continue';
+    $('#modeSwitch').hidden=true; $('#forgot').hidden=true; $('#google').hidden=true; $('#signin').textContent='Save and continue';
     $('#phone').focus(); toast('One last step: add your mobile number.');
     $('#signin').onclick=async()=>{
       const ph=cleanPhone($('#phone').value);
@@ -848,11 +848,40 @@ async function finishLogin(email){
   if(sb && await needPhone()) await askPhone();
   await enter(email);
 }
+$('#forgot').onclick=async(e)=>{ e.preventDefault();
+  const v=$('#email').value.trim();
+  if(!sb) return toast('Needs the online version.');
+  if(!/.+@.+\..+/.test(v)) return toast('Type your email address above first, then tap Forgot password.');
+  const {error}=await sb.auth.resetPasswordForEmail(v,{redirectTo:location.origin+location.pathname});
+  toast(error?'Reset emails are limited right now. Try again in an hour, or sign in with Google.':'If that email has an account, a reset link is on its way. Check spam too.');
+};
+function askNewPassword(){
+  show('auth'); $('#email').parentNode.hidden=true; $('#phonefield').hidden=true; $('#modeSwitch').hidden=true; $('#forgot').hidden=true; $('#google').hidden=true;
+  $('#pass').value=''; $('#pass').placeholder='New password (min 6 characters)'; $('#pass').autocomplete='new-password';
+  $('#signin').textContent='Set new password'; toast('Choose a new password.');
+  $('#signin').onclick=async()=>{
+    const pw=$('#pass').value; if(pw.length<6) return toast('Password needs at least 6 characters.');
+    const {error}=await sb.auth.updateUser({password:pw});
+    if(error) return toast('Could not change it: '+error.message);
+    toast('Password changed.'); history.replaceState(null,'',location.pathname); S.recovery=false; location.reload();
+  };
+}
 $('#signin').onclick = async ()=>{
   const v = $('#email').value.trim(), pw=$('#pass').value;
-  if(!/.+@.+\..+/.test(v)){ toast('That address needs an @ and a dot.'); return; }
-  if(!sb){ await enter(v); toast('Signed in as '+S.user); return; }
+  const isEmail=/.+@.+\..+/.test(v);
+  if(!sb){ if(!isEmail){ toast('That address needs an @ and a dot.'); return; } await enter(v); toast('Signed in as '+S.user); return; }
   if(pw.length<6){ toast('Password needs at least 6 characters.'); return; }
+  if(!isEmail){
+    if(signupMode){ toast('Use your email address to create an account.'); return; }
+    const ph=cleanPhone(v); if(!ph){ toast('Enter your email, or your 10-digit mobile number.'); return; }
+    $('#signin').disabled=true;
+    try{
+      const {data,error}=await sb.functions.invoke('dn-phone-login',{body:{phone:ph,password:pw}});
+      if(error||!data||!data.ok){ toast((data&&data.error)||'Could not sign in. Try again.'); return; }
+      await sb.auth.setSession({access_token:data.access_token,refresh_token:data.refresh_token});
+    } finally { $('#signin').disabled=false; }
+    return;
+  }
   let ph=null;
   if(signupMode){ ph=cleanPhone($('#phone').value); if(!ph){ toast('Mobile number is required (10 to 15 digits).'); return; } }
   $('#signin').disabled=true;
@@ -873,8 +902,11 @@ if(sb && CFG.GOOGLE){
   $('#google').hidden=false;
   $('#google').onclick=()=>sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
 }
+if(/type=recovery/.test(location.hash)) S.recovery=true;
 if(sb){
   sb.auth.onAuthStateChange((ev,sess)=>{
+    if(ev==='PASSWORD_RECOVERY'){ S.recovery=true; askNewPassword(); return; }
+    if(S.recovery) return;
     if(sess && sess.user && sess.user.email && !S.user && !S.entering){ S.entering=true; finishLogin(sess.user.email).finally(()=>{S.entering=false;}); }
   });
 }
