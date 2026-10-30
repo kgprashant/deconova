@@ -360,7 +360,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .gitem img{width:100%;display:block}
 .gitem .meta{position:absolute;left:0;right:0;bottom:0;padding:8px 9px;
   background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:12px;font-weight:600}
-.gitem .del{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;
+.gitem .del{position:absolute;top:34px;right:6px;width:28px;height:28px;border-radius:50%;
   background:rgba(0,0,0,.55);color:#fff;font-size:15px;display:grid;place-items:center}
 .empty{text-align:center;padding:52px 20px}
 
@@ -568,7 +568,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     </div>
 
     <div class="hr"></div>
-    <button class="btn" id="save">Save to gallery</button>
+    <button class="btn" id="save">Save to cloud</button>
   </div>
   </div>
   </div>
@@ -1115,7 +1115,7 @@ function listenTilt(){
 /* ---------------------- photo accepted ---------------------- */
 function onPhoto(dataUrl){
   shareId=null; if($('#shareOut')) $('#shareOut').innerHTML='';
-  S.original = dataUrl; S.versions=[]; S.read=null; S.story=null;
+  S.original = dataUrl; S.versions=[]; S.read=null; S.story=null; S.preTags=[];
   S.wall=null; S.kelvin=3200; S.ev=0; S.mask=null;
   $('#readimg').src = dataUrl;
   $$('#readwrap .brk').forEach(b=>b.remove());
@@ -1190,7 +1190,7 @@ async function preEdit(mode, extra, label){
     if(typeof (d&&d.credits_left)==='number'){ S.credits=d.credits_left; await sset('credits:'+S.user,S.credits); }
     if(!d || !d.ok){ toast((d&&d.message)||'The render did not finish.'); return; }
     const url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original);
-    S.original=url; S.versions=[]; S.selObj=null; S.dest=null;
+    S.original=url; S.versions=[]; S.selObj=null; S.dest=null; (S.preTags=S.preTags||[]).push((({remove:'Removed',replace:'Replaced',move:'Moved'})[mode]||'Edited')+': '+String(extra.target||'').replace(/^the /,''));
     $('#readimg').src=url; sampleRegions(url);
     $$('#readwrap .brk').forEach(b=>b.remove()); selUI(); buildStyleUI();
     toast(label+' done. Pick a style to continue.');
@@ -1886,6 +1886,23 @@ async function thumb(url,w=340){
     c.getContext('2d').drawImage(i,0,0,c.width,c.height);
     res(c.toDataURL('image/jpeg',0.7)); }; i.src=url; });
 }
+function buildTags(){
+  const t=[...(S.preTags||[])];
+  const st=STYLES.find(x=>x.id===S.style); if(st) t.push('Style: '+st.label);
+  const pk=PACKS.find(p=>p.id===S.pack); if(pk&&pk.id!=='none') t.push('For: '+pk.label);
+  S.versions.forEach(v=>{
+    const k=v.kind;
+    if(k==='floor') t.push('Floor: '+String(v.label).replace(/ floor$/,''));
+    else if(k==='remove') t.push('Removed: '+String(v.label).replace(/^Removed /,''));
+    else if(k==='replace') t.push('Replaced: '+String(v.label).replace(/^Replaced /,''));
+    else if(k==='move') t.push('Moved: '+String(v.label).replace(/^Moved /,''));
+    else if(k==='stage') t.push('Furnished: added furniture');
+    else if(k==='repaint') t.push('Wall: '+v.label);
+  });
+  if(S.decor&&S.decor.size) t.push('Added: '+[...S.decor].slice(0,4).join(', '));
+  if(S.kelvin!==3200||S.ev) t.push('Light: adjusted');
+  return [...new Set(t)];
+}
 $('#save').onclick = async ()=>{
   const s=STYLES.find(x=>x.id===S.style);
   const id='r'+Date.now();
@@ -1894,9 +1911,9 @@ $('#save').onclick = async ()=>{
     versions:S.versions.length, at:new Date().toISOString(),
     wall:S.wall? S.wall[0]:null, kelvin:S.kelvin, ev:S.ev,
     accent:(s.palette.map(p=>p[1]).sort((a,b)=>satOf(b)-satOf(a))[0]),
-    story:S.story, room:(S.read&&S.read.room_type)||'room'};
+    story:S.story, room:(S.read&&S.read.room_type)||'room', tags:buildTags()};
   const ok=await sset('room:'+id, rec);
-  toast(ok? 'Saved to your gallery.' : 'Saved for this session only — storage is unavailable here.');
+  toast(ok? 'Saved to your cloud with tags.' : 'Saved for this session only — storage is unavailable here.');
   if(!ok){ (window.__mem=window.__mem||[]).push(rec); }
   show('gallery'); drawGallery();
 };
@@ -1935,14 +1952,19 @@ async function drawGallery(){
     return;
   }
   window.__recs = recs;
-  body.innerHTML=photoHtml+(recs.length?'<div class="grouphead">Makeovers</div>':'')+`<div class="masonry">${recs.map((r,i)=>`
+  const types=[...new Set(recs.flatMap(r=>(r.tags||[]).map(t=>t.split(':')[0])))];
+  const af=window.__tagFilter||'All'; if(af!=='All' && !types.includes(af)) window.__tagFilter='All';
+  const shown=(window.__tagFilter&&window.__tagFilter!=='All')? recs.filter(r=>(r.tags||[]).some(t=>t.split(':')[0]===window.__tagFilter)) : recs;
+  const filterHtml = types.length ? `<div class="chips" id="tagFilter" style="margin-bottom:8px">${['All',...types].map(t=>`<button class="chip${(window.__tagFilter||'All')===t?' sel':''}" data-t="${t}">${t}</button>`).join('')}</div>` : '';
+  body.innerHTML=photoHtml+(recs.length?'<div class="grouphead">Makeovers</div>'+filterHtml:'')+`<div class="masonry">${shown.map((r,i)=>`
     <div class="gitem" data-open="${r.id}" style="animation-delay:${i*55}ms">
       <div class="ba"><img src="${r.before||r.after}" alt="Before"><img src="${r.after}" alt="${r.style} makeover"></div>
       <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>
       <button class="del" data-k="${r.k||''}" data-id="${r.id}" aria-label="Delete">×</button>
-      <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${r.room||'room'}${r.wall?' · '+r.wall+' walls':''}</span></div>
+      <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${(r.tags&&r.tags.length)? r.tags.filter(t=>!/^Style:/.test(t)).slice(0,2).join(' · ')||(r.room||'room') : (r.room||'room')+(r.wall?' · '+r.wall+' walls':'')}</span></div>
     </div>`).join('')}</div>
   <p class="credit" style="margin-top:14px">${photos.length} photo${photos.length===1?'':'s'} · ${recs.length} room${recs.length===1?'':'s'} · only visible to ${S.user}</p>`;
+  $$('#tagFilter .chip').forEach(b=>b.onclick=()=>{ window.__tagFilter=b.dataset.t; drawGallery(); });
   $$('.pitem').forEach(t=>t.onclick=()=>{ const p=(window.__photos||[]).find(x=>x.id===t.dataset.p); if(p) onPhoto(p.img); });
   $$('.pdel').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); await sdel('photo:'+b.dataset.p); window.__memp=(window.__memp||[]).filter(x=>x.id!==b.dataset.p); toast('Photo deleted.'); drawGallery(); });
   $$('.gitem[data-open]').forEach(t=>t.onclick=()=>{
@@ -1973,6 +1995,8 @@ function openSaved(r){
   $('#svBase').style.filter=`brightness(${1+ev*0.16}) contrast(${1+Math.abs(ev)*0.03})`;
   $('#svDownload').href=r.after;
   $('#svDownload').setAttribute('download', (r.style||'deconova').toLowerCase().replace(/\s+/g,'-')+'.jpg');
+  { let tg=$('#svTags'); if(!tg){ tg=document.createElement('div'); tg.id='svTags'; tg.className='chips'; tg.style.cssText='flex-wrap:wrap;margin:10px 0'; $('#svStory').parentNode.insertBefore(tg,$('#svStory')); }
+    tg.innerHTML=(r.tags||[]).map(t=>`<span class="chip sel" style="font-size:12px;padding:5px 10px">${t}</span>`).join(''); }
   renderStoryInto($('#svStory'), r.story);
   svSet(50); show('saved');
   const sh=$('#svShine'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
