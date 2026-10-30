@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     if (b.task === "room_read") {
       const j = await textAi(TEXT_MODEL, [img, { text:
         `You are the vision stage of an interior makeover app. Return ONLY minified JSON:
-{"room_type":string,"detected":[up to 6 short nouns actually visible],"light":{"sources":number,"direction":string,"quality":string},"estimated_ceiling_m":number,"is_empty":boolean}` }],
+{"room_type":string,"detected":[up to 8 short nouns actually visible],"objects":[up to 8 prominent individual items actually visible, each {"name":short noun,"box":[x,y,w,h]} with x,y the top-left corner and w,h the size, integers 0-100 as percent of image width/height, tight boxes, never walls, floor or ceiling],"light":{"sources":number,"direction":string,"quality":string},"estimated_ceiling_m":number,"is_empty":boolean}` }],
         { responseMimeType: "application/json" });
       return reply({ ok: true, result: parse(j) });
     }

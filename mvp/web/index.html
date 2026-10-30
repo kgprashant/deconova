@@ -169,6 +169,14 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .gitem .ba img{width:100%;height:100%;aspect-ratio:3/4;object-fit:cover}
 .gitem .tag{position:absolute;top:7px;background:rgba(18,17,16,.62);color:#F2EEE7;font-size:9.5px;letter-spacing:.1em;padding:3px 6px;border-radius:5px}
 .objs .chip small{opacity:.7;margin-left:4px}
+.objpick{position:relative;width:fit-content;max-width:100%;margin:0 auto 8px;border-radius:10px;overflow:hidden;background:#000}
+.objpick img{display:block;width:auto;max-width:100%;max-height:min(46vh,480px)}
+#opLayer{position:absolute;inset:0}
+.obox{position:absolute;border:1.5px solid rgba(255,255,255,.9);border-radius:4px;background:rgba(255,255,255,.04);padding:0}
+.obox span{position:absolute;top:-1px;left:-1px;background:#fff;color:#16171A;font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px 0 3px 0;white-space:nowrap}
+.obox.sel{border-color:var(--brass);background:rgba(200,169,106,.22);border-width:2px}
+.obox.sel span{background:var(--brass)}
+.destdot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;background:var(--brass);box-shadow:0 0 0 3px rgba(0,0,0,.4);pointer-events:none}
 .seg{display:flex;gap:8px;margin:10px 0}
 .seg .chip{flex:1;text-align:center}
 .brk{position:absolute;border:1.5px solid var(--signal-brk,#fff);border-radius:3px;
@@ -507,9 +515,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <div class="chips" id="floorChips"></div>
       <button class="btn" id="floorGo" disabled style="margin-top:10px">Apply floor — 1 credit</button>
       <div class="credit" style="margin:20px 0 8px">Pick an object, then replace or remove it</div>
+      <div class="objpick" id="objpick" hidden><img id="opImg" alt="Your room"><div id="opLayer"></div></div>
+      <p class="credit" id="opHint" hidden></p>
       <div class="chips objs" id="objChips"></div>
       <input type="text" id="rmText" placeholder="Or type the object, e.g. the ceiling fan" aria-label="Object to change" maxlength="80" style="margin-top:10px">
-      <div class="seg" id="objMode"><button class="chip sel" data-m="remove">Remove it</button><button class="chip" data-m="replace">Replace it</button></div>
+      <div class="seg" id="objMode"><button class="chip sel" data-m="remove">Remove it</button><button class="chip" data-m="replace">Replace it</button><button class="chip" data-m="move">Move it</button></div>
       <input type="text" id="repText" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
       <button class="btn" id="rmGo" style="margin-top:10px">Remove it — 1 credit</button>
       <div class="credit" style="margin:20px 0 8px">Empty room</div>
@@ -1118,18 +1128,17 @@ async function roomRead(dataUrl){
     const d = await callEdge('ai',{task:'room_read', image:dataUrl.split(',')[1]});
     if(!d || !d.ok) throw new Error('read');
     S.read = d.result;
-  }catch(e){ S.read = fallback; }
+    S.read.objects=(Array.isArray(S.read.objects)?S.read.objects:[]).map(o=>{ const b=Array.isArray(o.box)?o.box.map(Number):[]; if(!o||!o.name||b.length!==4||b.some(x=>!isFinite(x))) return null; let [x,y,w,h]=b.map(v=>Math.max(0,Math.min(100,v))); if(w<3||h<3) return null; w=Math.min(w,100-x); h=Math.min(h,100-y); return {name:String(o.name).slice(0,24),box:[x,y,w,h]}; }).filter(Boolean).slice(0,8);
+  }catch(e){ S.read = fallback; S.read.objects=[]; }
   paintBrackets();
 }
 function paintBrackets(){
   const w=$('#readwrap'); $$('#readwrap .brk').forEach(b=>b.remove());
-  const items=(S.read.detected||[]).slice(0,6);
-  const spots=[[8,46,38,34],[52,54,40,30],[60,12,32,28],[6,10,34,24],[30,70,36,22],[70,36,26,24]];
-  items.forEach((n,i)=>{
-    const [l,t,ww,hh]=spots[i%spots.length];
+  (S.read.objects||[]).forEach((o,i)=>{
+    const [l,t,ww,hh]=o.box;
     const d=document.createElement('div'); d.className='brk';
     d.style.cssText=`left:${l}%;top:${t}%;width:${ww}%;height:${hh}%;animation-delay:${i*130}ms`;
-    d.innerHTML='<span>'+n+'</span>'; w.appendChild(d);
+    d.innerHTML='<span>'+o.name+'</span>'; w.appendChild(d);
   });
   const L=S.read.light||{};
   $('#readnote').textContent = `${S.read.room_type||'room'} · ${L.sources??'—'} light sources, ${L.quality||'mixed light'} · ceiling about ${S.read.estimated_ceiling_m||'2.7'} m`;
@@ -1489,31 +1498,77 @@ async function editRender(mode, extra, label){
     S.compare=[0,S.versions.length];
     drawVersions(); loadFrames(); applyLight();
     showMatch(url);
+    buildObjChips();
     toast(`${label} done. Saved as v${S.versions.length} — the old one is still there.`);
   }catch(e){ toast(e.message||'The render did not finish.'); }
   finally{ stopLoader(); }
 }
 $('#floorGo').onclick=()=>floorPick&&editRender('floor',{material:floorPick},floorPick+' floor');
 let objMode='remove';
+function pct(n){ return Math.round(n); }
+function locText(o){ const [x,y,w,h]=o.box; return `about ${pct(x+w/2)} percent from the left edge and ${pct(y+h/2)} percent from the top, spanning about ${pct(w)} percent of the width`; }
+function paintPick(){
+  const layer=$('#opLayer'); if(!layer) return; layer.innerHTML='';
+  (S.read&&S.read.objects||[]).forEach(o=>{
+    const [x,y,w,h]=o.box; const b=document.createElement('button'); b.type='button'; b.className='obox'+(S.selObj===o?' sel':'');
+    b.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`; b.innerHTML='<span>'+o.name+'</span>';
+    b.onclick=ev=>{
+      if(objMode==='move' && S.selObj){ setDest(ev); return; }
+      S.selObj=o; S.dest=null; $('#rmText').value='the '+o.name; paintPick(); hintText();
+    };
+    layer.appendChild(b);
+  });
+  if(S.dest){ const d=document.createElement('i'); d.className='destdot'; d.style.left=S.dest.x+'%'; d.style.top=S.dest.y+'%'; layer.appendChild(d); }
+}
+function setDest(ev){
+  const r=$('#opLayer').getBoundingClientRect();
+  S.dest={x:Math.max(2,Math.min(98,Math.round((ev.clientX-r.left)/r.width*100))), y:Math.max(2,Math.min(98,Math.round((ev.clientY-r.top)/r.height*100)))};
+  paintPick(); hintText();
+}
+function hintText(){
+  const h=$('#opHint'); if(!h) return; const has=(S.read&&S.read.objects||[]).length>0;
+  h.hidden=!has;
+  if(!has) return;
+  if(!S.selObj) h.textContent='Tap an object on the photo to select it.';
+  else if(objMode==='move') h.textContent=S.dest? 'Destination marked. Tap again to change it, then press Move.' : `Selected: ${S.selObj.name}. Now tap where it should go.`;
+  else h.textContent=`Selected: ${S.selObj.name}. Choose Remove or Replace below.`;
+}
 function buildObjChips(){
   const box=$('#objChips'); if(!box) return; box.innerHTML='';
-  const names=[...new Set([...(S.read&&S.read.detected||[]),'rug','curtains','lamp','wall art','plants','clutter'])].filter(n=>!/^(wall|floor|ceiling)$/i.test(n));
+  const objs=(S.read&&S.read.objects)||[];
+  const pick=$('#objpick'); pick.hidden=!objs.length;
+  if(objs.length){
+    $('#opImg').src=currentUrl();
+    S.selObj=null; S.dest=null; paintPick();
+    $('#opLayer').onclick=ev=>{ if(ev.target.id==='opLayer' && objMode==='move' && S.selObj) setDest(ev); };
+  }
+  hintText();
+  const names=[...new Set([...objs.map(o=>o.name),...(S.read&&S.read.detected||[]),'rug','curtains','lamp','wall art','plants','clutter'])].filter(n=>!/^(wall|floor|ceiling)$/i.test(n));
   names.slice(0,12).forEach(n=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=n;
-    b.onclick=()=>{ $('#rmText').value='the '+n; $$('#objChips .chip').forEach(x=>x.classList.toggle('sel',x===b)); };
+    b.onclick=()=>{ $('#rmText').value='the '+n; const o=objs.find(x=>x.name===n); S.selObj=o||null; S.dest=null; paintPick(); hintText();
+      $$('#objChips .chip').forEach(x=>x.classList.toggle('sel',x===b)); };
     box.appendChild(b); });
 }
 function syncObjMode(){
   $$('#objMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===objMode));
   $('#repText').hidden = objMode!=='replace';
-  $('#rmGo').textContent = objMode==='replace' ? 'Replace it — 1 credit' : 'Remove it — 1 credit';
+  $('#rmGo').textContent = ({replace:'Replace it — 1 credit',move:'Move it — 1 credit',remove:'Remove it — 1 credit'})[objMode];
+  hintText();
 }
 $$('#objMode .chip').forEach(b=>b.onclick=()=>{ objMode=b.dataset.m; syncObjMode(); });
 $('#rmGo').onclick=()=>{
-  const t=$('#rmText').value.trim(); if(!t){ toast('Pick or type an object first.'); return; }
+  const t=$('#rmText').value.trim(); if(!t){ toast('Pick an object first.'); return; }
+  const o=S.selObj && ('the '+S.selObj.name)===t ? S.selObj : null;
+  const loc=o?locText(o):'';
+  const nm=t.replace(/^the /,'').slice(0,14);
   if(objMode==='replace'){
     const r=$('#repText').value.trim(); if(!r){ toast('Say what to replace it with.'); return; }
-    editRender('replace',{target:t,replacement:r},'Replaced '+t.replace(/^the /,'').slice(0,14));
-  } else editRender('remove',{target:t},'Removed '+t.slice(0,18));
+    editRender('replace',{target:t,replacement:r,loc},'Replaced '+nm);
+  } else if(objMode==='move'){
+    if(!o){ toast('Tap an object on the photo first.'); return; }
+    if(!S.dest){ toast('Tap on the photo where it should go.'); return; }
+    editRender('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Moved '+nm);
+  } else editRender('remove',{target:t,loc},'Removed '+nm);
 };
 $('#stageGo').onclick=()=>editRender('stage',{density},'Furnished');
 

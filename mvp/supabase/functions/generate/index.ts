@@ -44,11 +44,15 @@ Lighting character: ${style.lighting}` : "";
 Keep every other element identical: walls, furniture, decor, ceiling, window frames, camera angle and composition.
 Keep the perspective of the floor and the existing shadows and light. Photorealistic. No text.`;
     case "remove":
-      return `Remove the following from this interior photograph: ${clean(b.target, 80)}.
+      return `Remove the following from this interior photograph: ${clean(b.target, 80)}.${b.loc ? " Its location in the photo: " + clean(b.loc, 120) + "." : ""}
 Fill the area with realistic background that continues the surrounding wall, floor or surface.
 Keep every other element identical, including the camera angle and composition. Photorealistic. No text.`;
+    case "move":
+      return `In this interior photograph, move the following item: ${clean(b.target, 80)}.${b.loc ? " It is currently located " + clean(b.loc, 120) + "." : ""} Move it so that it is located ${clean(b.dest, 120)}.
+Show the same item, same size and design, adjusted only for perspective, and keep its shadows consistent. Fill the area it vacated with realistic background that continues the surrounding wall or floor.
+Keep every other element identical, including the camera angle and composition. Photorealistic. No text.`;
     case "replace":
-      return `In this interior photograph, replace the following: ${clean(b.target, 80)} with ${clean(b.replacement, 80)}.
+      return `In this interior photograph, replace the following: ${clean(b.target, 80)} with ${clean(b.replacement, 80)}.${b.loc ? " Its location in the photo: " + clean(b.loc, 120) + "." : ""}
 The new item must match the room's perspective, scale, lighting and shadows, and sit naturally where the old one was.
 Keep every other element identical, including the camera angle and composition. Photorealistic. No text.`;
   }
