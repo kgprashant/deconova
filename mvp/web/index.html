@@ -340,7 +340,10 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <div class="field">
         <input type="email" id="email" placeholder="Your email" autocomplete="email" aria-label="Email address">
       </div>
-      <button class="enter" id="signin">Enter</button>
+      <div class="field" style="margin-top:14px"><input type="password" id="pass" placeholder="Password (min 6 characters)" autocomplete="current-password" aria-label="Password"></div>
+      <div class="field" id="phonefield" style="margin-top:14px" hidden><input type="tel" id="phone" placeholder="Mobile number, e.g. +91 98765 43210" autocomplete="tel" aria-label="Mobile number"></div>
+      <button class="enter" id="signin" style="margin-top:18px">Sign in</button>
+      <p class="quiet" style="margin:10px 0 0"><a href="#" id="modeSwitch" style="text-decoration:underline">New here? Create an account</a></p>
       <button class="enter" id="google" hidden style="margin-top:10px">Continue with Google</button>
       <p class="quiet">Your rooms stay yours. <a href="privacy.html" style="text-decoration:underline">Privacy</a></p>
     </div>
@@ -816,15 +819,54 @@ async function enter(email){
   }
   show('gallery'); drawGallery();
 }
+let signupMode=false;
+function cleanPhone(v){ const d=v.replace(/[^0-9]/g,''); if(d.length<10||d.length>15) return null; return (v.trim().startsWith('+')?'+':(d.length===10?'+91':'+'))+d; }
+$('#modeSwitch').onclick=(e)=>{ e.preventDefault(); signupMode=!signupMode;
+  $('#phonefield').hidden=!signupMode; $('#signin').textContent=signupMode?'Create account':'Sign in';
+  $('#modeSwitch').textContent=signupMode?'Already have an account? Sign in':'New here? Create an account';
+  $('#pass').autocomplete=signupMode?'new-password':'current-password'; };
+async function needPhone(){
+  const {data}=await sb.from('dn_users').select('phone').maybeSingle();
+  return !(data&&data.phone);
+}
+function askPhone(){
+  return new Promise(res=>{
+    show('auth'); $('#phonefield').hidden=false; $('#email').parentNode.hidden=true; $('#pass').parentNode.hidden=true;
+    $('#modeSwitch').hidden=true; $('#google').hidden=true; $('#signin').textContent='Save and continue';
+    $('#phone').focus(); toast('One last step: add your mobile number.');
+    $('#signin').onclick=async()=>{
+      const ph=cleanPhone($('#phone').value);
+      if(!ph){ toast('Enter a valid mobile number (10 to 15 digits).'); return; }
+      const {error}=await sb.rpc('dn_save_profile',{p_phone:ph});
+      if(error){ toast('Could not save the number. Try again.'); return; }
+      res();
+    };
+  });
+}
+async function finishLogin(email){
+  if(sb && await needPhone()) await askPhone();
+  await enter(email);
+}
 $('#signin').onclick = async ()=>{
-  const v = $('#email').value.trim();
+  const v = $('#email').value.trim(), pw=$('#pass').value;
   if(!/.+@.+\..+/.test(v)){ toast('That address needs an @ and a dot.'); return; }
-  if(sb){
-    const {error}=await sb.auth.signInWithOtp({email:v, options:{emailRedirectTo:location.origin+location.pathname}});
-    toast(error? 'Email links are limited right now. Please use Continue with Google, it works instantly.' : 'Check your inbox for the sign-in link.');
-    return;
-  }
-  await enter(v); toast('Signed in as '+S.user);
+  if(!sb){ await enter(v); toast('Signed in as '+S.user); return; }
+  if(pw.length<6){ toast('Password needs at least 6 characters.'); return; }
+  let ph=null;
+  if(signupMode){ ph=cleanPhone($('#phone').value); if(!ph){ toast('Mobile number is required (10 to 15 digits).'); return; } }
+  $('#signin').disabled=true;
+  try{
+    let r;
+    if(signupMode){
+      r=await sb.auth.signUp({email:v,password:pw});
+      if(r.error){ toast(/registered|exists/i.test(r.error.message)?'That email already has an account. Sign in instead.':r.error.message); return; }
+      if(!r.data.session){ toast('Account created, but email confirmation is still on. Ask the admin to turn it off.'); return; }
+      await sb.rpc('dn_save_profile',{p_phone:ph});
+    } else {
+      r=await sb.auth.signInWithPassword({email:v,password:pw});
+      if(r.error){ toast('Wrong email or password. New here? Create an account.'); return; }
+    }
+  } finally { $('#signin').disabled=false; }
 };
 if(sb && CFG.GOOGLE){
   $('#google').hidden=false;
@@ -832,12 +874,12 @@ if(sb && CFG.GOOGLE){
 }
 if(sb){
   sb.auth.onAuthStateChange((ev,sess)=>{
-    if(sess && sess.user && sess.user.email && !S.user) enter(sess.user.email);
+    if(sess && sess.user && sess.user.email && !S.user && !S.entering){ S.entering=true; finishLogin(sess.user.email).finally(()=>{S.entering=false;}); }
   });
 }
 $('#signout').onclick = async ()=>{
   if(sb) await sb.auth.signOut();
-  S.user=null; S.versions=[]; S.original=null; show('auth'); $('#nav').classList.remove('on');
+  S.user=null; S.versions=[]; S.original=null; location.reload();
 };
 
 /* ---------------------- storage (per user) ---------------------- */
