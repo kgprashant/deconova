@@ -188,6 +188,13 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .stile b{display:block;padding:8px 10px 10px;font-size:14px;font-weight:600}
 .gobar{position:sticky;bottom:72px;z-index:5;padding:12px 0 6px;background:linear-gradient(to top,var(--ground) 72%,rgba(18,17,16,0))}
 .grouphead{font-family:var(--display);font-weight:400;font-size:20px;margin:24px 0 11px;color:var(--ink)}
+.sgroup{border:1px solid var(--line);border-radius:var(--r-control);background:var(--panel);margin-top:12px;padding:0 12px}
+.sgroup summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 2px;font-family:var(--display);font-size:18px}
+.sgroup summary::-webkit-details-marker{display:none}
+.sgroup summary em{font-style:normal;font-family:inherit;font-size:12.5px;color:var(--ink-soft)}
+.sgroup summary:after{content:'▾';margin-left:10px;color:var(--brass)}
+.sgroup[open] summary:after{content:'▴'}
+.sgroup .grid{padding-bottom:12px}
 .grouphead:after{content:"";display:block;width:34px;height:1px;background:var(--brass);margin-top:9px;opacity:.8}
 
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
@@ -234,7 +241,10 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
   #s-auth{max-width:760px}
   .dgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(340px,1fr);column-gap:36px;align-items:start}
   .dleft{position:sticky;top:16px}
-  #s-style .dgrid{grid-template-columns:minmax(300px,0.9fr) minmax(0,1.4fr)}
+  #s-style .dgrid,#s-result .dgrid{display:block}
+  #s-style .dleft,#s-result .dleft{position:static}
+  .readwrap img{max-height:min(52vh,560px)}
+  #revBase,#svBase{max-height:min(58vh,620px)}
   #s-style .pad,#s-result .dright .pad{padding-left:0;padding-right:0}
   #s-result .dright>.pad{padding-top:0}
   #s-result #reveal{border-radius:14px}
@@ -392,7 +402,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <button class="btn" id="shoot">Take the photo</button>
     <div style="height:10px"></div>
     <button class="btn ghost" id="pickBtn">Choose from photos</button>
-    <input type="file" id="pick" accept="image/*" capture="environment" hidden>
+    <input type="file" id="pick" accept="image/*" hidden>
     <p class="credit" style="margin-top:14px" id="camnote"></p>
   </div>
 </section>
@@ -529,7 +539,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 
 <!-- ============ GALLERY ============ -->
 <section class="screen" id="s-gallery">
-  <div class="topbar"><h2>Gallery</h2><button class="back" id="newFromGallery">Add a photo</button></div>
+  <div class="topbar"><h2>Gallery</h2><button class="back" id="newFromGallery">Choose from photos</button></div>
   <div class="pad" style="padding-top:8px"><div id="galleryBody"></div></div>
 </section>
 
@@ -1131,16 +1141,26 @@ function buildStyleUI(){
   const cur=rest.find(k=>k.id===S.pack);
   if(cur){ const n=document.createElement('div'); n.className='packnote'; n.textContent=cur.note; p.appendChild(n); }
   const g=$('#styleGroups'); g.innerHTML='';
-  [...new Set(STYLES.map(s=>s.group))].forEach(gr=>{
-    const h=document.createElement('div'); h.className='grouphead'; h.textContent=gr; h.style.marginTop='14px'; g.appendChild(h);
+  if(!window.__open) window.__open=new Set();
+  [...new Set(STYLES.map(s=>s.group))].forEach((gr,gi)=>{
+    const list=STYLES.filter(s=>s.group===gr);
+    const hasSel=list.some(s=>s.id===S.style);
     const grid=document.createElement('div'); grid.className='grid';
-    STYLES.filter(s=>s.group===gr).forEach(s=>{
+    list.forEach(s=>{
       const b=document.createElement('button'); b.className='stile'+(S.style===s.id?' sel':'');
       b.innerHTML=`<div class="swatchrow">${s.palette.map(c=>`<i style="background:${c[1]}"></i>`).join('')}</div><b>${s.label}</b>`;
-      b.onclick=()=>{ S.style=s.id; buildStyleUI(); };
+      b.onclick=()=>{ S.style=s.id; window.__open.add(gr); buildStyleUI(); };
       grid.appendChild(b);
     });
-    g.appendChild(grid);
+    if(gi===0){
+      const h=document.createElement('div'); h.className='grouphead'; h.textContent=gr; h.style.marginTop='14px'; g.appendChild(h); g.appendChild(grid);
+    } else {
+      const det=document.createElement('details'); det.className='sgroup';
+      if(hasSel||window.__open.has(gr)) det.open=true;
+      det.ontoggle=()=>{ det.open? window.__open.add(gr):window.__open.delete(gr); };
+      const sm=document.createElement('summary'); sm.innerHTML=`<span>${gr}</span><em>${list.length} styles</em>`;
+      det.appendChild(sm); det.appendChild(grid); g.appendChild(det);
+    }
   });
   const d=$('#decor'); d.innerHTML='';
   DECOR.forEach(x=>{
@@ -1769,7 +1789,7 @@ async function drawGallery(){
     toast('Deleted. The photo is gone too.'); drawGallery();
   });
 }
-$('#newFromGallery').onclick=()=>startCapture();
+$('#newFromGallery').onclick=()=>$('#pick').click();
 
 /* ---------------------- saved room, read only ---------------------- */
 let svCur=null;
