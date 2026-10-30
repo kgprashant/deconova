@@ -204,6 +204,29 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 #loadlines{position:relative;margin-top:26px;text-align:center;font-size:14.5px;min-height:46px;width:min(320px,86vw)}
 #loadlines div{opacity:1}
 
+
+/* ---------- desktop layout (wide screens) ---------- */
+@media (min-width:900px){
+  #app{max-width:1240px;margin:0 auto;padding-left:104px;padding-right:24px;padding-bottom:48px}
+  #nav{top:0;bottom:0;left:0;right:auto;width:92px;max-width:none;margin:0;border-top:0;border-right:1px solid var(--line);
+    padding:28px 0;align-content:start;grid-template-columns:1fr;grid-auto-rows:min-content;row-gap:26px}
+  #nav .ring{margin-top:0}
+  body .toast{bottom:28px}
+  #app .topbar{padding-left:0;padding-right:0}
+  #s-auth{max-width:760px}
+  .dgrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(340px,1fr);column-gap:36px;align-items:start}
+  .dleft{position:sticky;top:16px}
+  #s-style .dgrid{grid-template-columns:minmax(300px,0.9fr) minmax(0,1.4fr)}
+  #s-style .pad,#s-result .dright .pad{padding-left:0;padding-right:0}
+  #s-result .dright>.pad{padding-top:0}
+  #s-result #reveal{border-radius:14px}
+  #s-capture .pad{max-width:620px;margin:0 auto}
+  #s-gallery .masonry{columns:4;column-gap:14px}
+  #s-you .pad,#s-saved .pad{max-width:720px;margin-left:0}
+  .packs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .gobar{position:sticky;bottom:0;background:var(--ground);padding:10px 0}
+}
+@media (min-width:1500px){ #app{max-width:1400px} }
 /* ---------- reveal ---------- */
 #reveal{position:relative;overflow:hidden;background:#000;touch-action:none;user-select:none;
   border-radius:0 0 14px 14px}
@@ -355,9 +378,12 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <section class="screen" id="s-style">
   <div class="topbar"><h2>What's in here</h2><button class="back" id="styleBack">Retake</button></div>
   <div class="pad" style="padding-top:8px">
+   <div class="dgrid">
+    <div class="dleft">
     <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"></div>
     <p class="credit" id="readnote" style="margin-top:10px">Reading the room…</p>
-
+    </div>
+    <div class="dright">
     <div class="grouphead" style="margin-top:20px">Who lives here</div>
     <div class="packs" id="packs"></div>
 
@@ -372,6 +398,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <button class="btn sig" id="go">Make it over</button>
       <p class="credit" style="text-align:center;margin-top:8px" id="creditline"></p>
     </div>
+    </div>
+   </div>
   </div>
 </section>
 
@@ -381,6 +409,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div><h2 id="resTitle">Makeover</h2><div class="credit" id="resSub"></div></div>
     <button class="back" id="resBack">Done</button>
   </div>
+  <div class="dgrid">
+  <div class="dleft">
   <div id="reveal">
     <img id="revBase" alt="Makeover result">
     <div id="revTop"><img id="revTopImg" alt="Original room"></div>
@@ -391,6 +421,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="shine" id="shine"></div>
   </div>
   <div class="simnote" id="simnote">Simulated render — the real build sends this frame to the image model. Wall colour, light, contrast checks and the story below are live.</div>
+  </div>
+  <div class="dright">
   <div class="pad">
     <div class="credit" style="margin-bottom:4px">Compare</div>
     <div class="vrow" id="vrow"></div>
@@ -464,6 +496,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 
     <div class="hr"></div>
     <button class="btn" id="save">Save to gallery</button>
+  </div>
+  </div>
   </div>
 </section>
 
