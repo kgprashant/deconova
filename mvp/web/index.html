@@ -341,8 +341,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
         <input type="email" id="email" placeholder="Your email" autocomplete="email" aria-label="Email address">
       </div>
       <button class="enter" id="signin">Enter</button>
-      <button class="quietlink" id="google" hidden>Continue with Google</button>
-      <p class="quiet">Your rooms stay yours.</p>
+      <button class="enter" id="google" hidden style="margin-top:10px">Continue with Google</button>
+      <p class="quiet">Your rooms stay yours. <a href="privacy.html" style="text-decoration:underline">Privacy</a></p>
     </div>
   </div>
 </section>
@@ -821,7 +821,7 @@ $('#signin').onclick = async ()=>{
   if(!/.+@.+\..+/.test(v)){ toast('That address needs an @ and a dot.'); return; }
   if(sb){
     const {error}=await sb.auth.signInWithOtp({email:v, options:{emailRedirectTo:location.origin+location.pathname}});
-    toast(error? 'Could not send the link. Try again in a minute.' : 'Check your inbox for the sign-in link.');
+    toast(error? 'Email links are limited right now. Please use Continue with Google, it works instantly.' : 'Check your inbox for the sign-in link.');
     return;
   }
   await enter(v); toast('Signed in as '+S.user);
