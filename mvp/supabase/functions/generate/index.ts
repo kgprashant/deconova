@@ -47,6 +47,10 @@ Keep the perspective of the floor and the existing shadows and light. Photoreali
       return `Remove the following from this interior photograph: ${clean(b.target, 80)}.
 Fill the area with realistic background that continues the surrounding wall, floor or surface.
 Keep every other element identical, including the camera angle and composition. Photorealistic. No text.`;
+    case "replace":
+      return `In this interior photograph, replace the following: ${clean(b.target, 80)} with ${clean(b.replacement, 80)}.
+The new item must match the room's perspective, scale, lighting and shadows, and sit naturally where the old one was.
+Keep every other element identical, including the camera angle and composition. Photorealistic. No text.`;
   }
   return null;
 }

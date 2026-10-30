@@ -119,7 +119,9 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 
 /* ---------- saved room (read only) ---------- */
 #svReveal{position:relative;overflow:hidden;background:#000;touch-action:none;user-select:none}
-#svReveal>img{width:100%;display:block;pointer-events:none}
+#svReveal{width:fit-content;max-width:100%;margin:0 auto}
+#svReveal>img{display:block;pointer-events:none}
+#svBase{width:auto;max-width:100%;max-height:min(66vh,720px);margin:0 auto}
 #svTop{position:absolute;inset:0;overflow:hidden;will-change:clip-path}
 #svTop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #svHandle{display:grid;place-items:center;color:#121110;font-size:13px;font-weight:700;
@@ -158,7 +160,17 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 
 /* ---------- room read brackets ---------- */
 .readwrap{position:relative;border-radius:14px;overflow:hidden;background:#000}
-.readwrap img{width:100%;display:block}
+.readwrap{width:fit-content;max-width:100%;margin:0 auto}
+.readwrap img{display:block;width:auto;max-width:100%;max-height:min(56vh,620px);margin:0 auto}
+.packsel{width:100%;margin-top:8px;padding:12px;border-radius:var(--r-control);border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:15px}
+.packsel.sel{border-color:var(--brass);box-shadow:inset 0 0 0 1px var(--brass)}
+.packnote{color:var(--ink-soft);font-size:12.5px;margin:6px 2px 0}
+.gitem .ba{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:#000}
+.gitem .ba img{width:100%;height:100%;aspect-ratio:3/4;object-fit:cover}
+.gitem .tag{position:absolute;top:7px;background:rgba(18,17,16,.62);color:#F2EEE7;font-size:9.5px;letter-spacing:.1em;padding:3px 6px;border-radius:5px}
+.objs .chip small{opacity:.7;margin-left:4px}
+.seg{display:flex;gap:8px;margin:10px 0}
+.seg .chip{flex:1;text-align:center}
 .brk{position:absolute;border:1.5px solid var(--signal-brk,#fff);border-radius:3px;
   opacity:0;animation:brkin .5s var(--ease) forwards}
 .brk span{position:absolute;top:-9px;left:6px;background:#fff;color:#16171A;font-size:10px;
@@ -178,7 +190,12 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .grouphead{font-family:var(--display);font-weight:400;font-size:20px;margin:24px 0 11px;color:var(--ink)}
 .grouphead:after{content:"";display:block;width:34px;height:1px;background:var(--brass);margin-top:9px;opacity:.8}
 
-.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+.chips .chip{scroll-snap-align:start;flex:none}
+.scrollrow{position:relative}
+.sarrow{display:none;position:absolute;top:2px;width:34px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(18,17,16,.92);color:var(--ink);font-size:20px;z-index:2}
+.sarrow.l{left:-6px}.sarrow.r{right:-6px}
+@media (hover:hover) and (pointer:fine){ .sarrow{display:grid;place-items:center} }
 .chips::-webkit-scrollbar{display:none}
 .chip{border:1px solid var(--line);border-radius:99px;padding:8px 14px;white-space:nowrap;
   font-size:14px;background:var(--panel)}
@@ -231,7 +248,9 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 /* ---------- reveal ---------- */
 #reveal{position:relative;overflow:hidden;background:#000;touch-action:none;user-select:none;
   border-radius:0 0 14px 14px}
-#reveal img{width:100%;display:block;pointer-events:none}
+#reveal{width:fit-content;max-width:100%;margin:0 auto;border-radius:0 0 14px 14px}
+#reveal img{display:block;pointer-events:none}
+#revBase{width:auto;max-width:100%;max-height:min(66vh,720px);margin:0 auto}
 #revAfter{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #revTop{position:absolute;inset:0;overflow:hidden;will-change:clip-path}
 #revTop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -395,7 +414,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div id="styleGroups"></div>
 
     <div class="grouphead">Add to the room</div>
-    <div class="chips" id="decor"></div>
+    <div class="scrollrow"><button class="sarrow l" type="button" aria-label="Scroll left" id="decL">‹</button><div class="chips" id="decor"></div><button class="sarrow r" type="button" aria-label="Scroll right" id="decR">›</button></div>
 
     <div style="height:14px"></div>
     <div class="gobar">
@@ -470,8 +489,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <div class="credit" style="margin-bottom:8px">Change the floor</div>
       <div class="chips" id="floorChips"></div>
       <button class="btn" id="floorGo" disabled style="margin-top:10px">Apply floor — 1 credit</button>
-      <div class="credit" style="margin:20px 0 8px">Remove something</div>
-      <input type="text" id="rmText" placeholder="e.g. the ceiling fan, the clutter on the table" aria-label="What to remove" maxlength="80">
+      <div class="credit" style="margin:20px 0 8px">Pick an object, then replace or remove it</div>
+      <div class="chips objs" id="objChips"></div>
+      <input type="text" id="rmText" placeholder="Or type the object, e.g. the ceiling fan" aria-label="Object to change" maxlength="80" style="margin-top:10px">
+      <div class="seg" id="objMode"><button class="chip sel" data-m="remove">Remove it</button><button class="chip" data-m="replace">Replace it</button></div>
+      <input type="text" id="repText" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
       <button class="btn" id="rmGo" style="margin-top:10px">Remove it — 1 credit</button>
       <div class="credit" style="margin:20px 0 8px">Empty room</div>
       <div class="chips" id="densChips"><button class="chip" data-d="minimal">Minimal</button><button class="chip sel" data-d="balanced">Balanced</button><button class="chip" data-d="full">Full</button></div>
@@ -1097,12 +1119,17 @@ function paintBrackets(){
 /* ---------------------- style screen ---------------------- */
 function buildStyleUI(){
   const p=$('#packs'); p.innerHTML='';
-  PACKS.forEach(k=>{
-    const b=document.createElement('button'); b.className='pack'+(S.pack===k.id?' sel':'');
-    b.innerHTML=`<div><b>${k.label}</b><small>${k.note}</small></div>`;
-    b.onclick=()=>{ S.pack=k.id; buildStyleUI(); };
-    p.appendChild(b);
-  });
+  const first=PACKS[0], rest=PACKS.slice(1);
+  const b0=document.createElement('button'); b0.className='pack'+(S.pack===first.id?' sel':'');
+  b0.innerHTML=`<div><b>${first.label}</b><small>${first.note}</small></div>`;
+  b0.onclick=()=>{ S.pack=first.id; buildStyleUI(); };
+  p.appendChild(b0);
+  const sel=document.createElement('select'); sel.className='packsel'+(rest.some(k=>k.id===S.pack)?' sel':''); sel.setAttribute('aria-label','Who lives here');
+  sel.innerHTML='<option value="">Or choose who lives here…</option>'+rest.map(k=>`<option value="${k.id}"${S.pack===k.id?' selected':''}>${k.label}</option>`).join('');
+  sel.onchange=()=>{ if(sel.value){ S.pack=sel.value; buildStyleUI(); } };
+  p.appendChild(sel);
+  const cur=rest.find(k=>k.id===S.pack);
+  if(cur){ const n=document.createElement('div'); n.className='packnote'; n.textContent=cur.note; p.appendChild(n); }
   const g=$('#styleGroups'); g.innerHTML='';
   [...new Set(STYLES.map(s=>s.group))].forEach(gr=>{
     const h=document.createElement('div'); h.className='grouphead'; h.textContent=gr; h.style.marginTop='14px'; g.appendChild(h);
@@ -1125,6 +1152,9 @@ function buildStyleUI(){
   $('#creditline').textContent = `${S.credits} credits left`;
   $('#go').disabled = !S.style;
 }
+$('#decL').onclick=()=>$('#decor').scrollBy({left:-240,behavior:'smooth'});
+$('#decR').onclick=()=>$('#decor').scrollBy({left:240,behavior:'smooth'});
+$('#decor').addEventListener('wheel',e=>{ if(Math.abs(e.deltaY)>Math.abs(e.deltaX)){ e.currentTarget.scrollLeft+=e.deltaY; e.preventDefault(); } },{passive:false});
 $('#styleBack').onclick = ()=> startCapture();
 
 /* ---------------------- the "render" ---------------------- */
@@ -1407,6 +1437,7 @@ function wipe(){
 const FLOORS=['Light oak','Walnut','Herringbone wood','White marble','Terrazzo','Kota stone','Grey vitrified tile','Athangudi tile'];
 let floorPick=null, density='balanced';
 function buildEditUI(){
+  buildObjChips(); syncObjMode();
   const box=$('#floorChips'); box.innerHTML='';
   FLOORS.forEach(f=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=f;
     b.onclick=()=>{ floorPick=f; $$('#floorChips .chip').forEach(x=>x.classList.toggle('sel',x===b)); $('#floorGo').disabled=false; };
@@ -1434,7 +1465,27 @@ async function editRender(mode, extra, label){
   finally{ stopLoader(); }
 }
 $('#floorGo').onclick=()=>floorPick&&editRender('floor',{material:floorPick},floorPick+' floor');
-$('#rmGo').onclick=()=>{ const t=$('#rmText').value.trim(); if(!t){ toast('Say what to remove first.'); return; } editRender('remove',{target:t},'Removed '+t.slice(0,18)); };
+let objMode='remove';
+function buildObjChips(){
+  const box=$('#objChips'); if(!box) return; box.innerHTML='';
+  const names=[...new Set([...(S.read&&S.read.detected||[]),'rug','curtains','lamp','wall art','plants','clutter'])].filter(n=>!/^(wall|floor|ceiling)$/i.test(n));
+  names.slice(0,12).forEach(n=>{ const b=document.createElement('button'); b.className='chip'; b.textContent=n;
+    b.onclick=()=>{ $('#rmText').value='the '+n; $$('#objChips .chip').forEach(x=>x.classList.toggle('sel',x===b)); };
+    box.appendChild(b); });
+}
+function syncObjMode(){
+  $$('#objMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===objMode));
+  $('#repText').hidden = objMode!=='replace';
+  $('#rmGo').textContent = objMode==='replace' ? 'Replace it — 1 credit' : 'Remove it — 1 credit';
+}
+$$('#objMode .chip').forEach(b=>b.onclick=()=>{ objMode=b.dataset.m; syncObjMode(); });
+$('#rmGo').onclick=()=>{
+  const t=$('#rmText').value.trim(); if(!t){ toast('Pick or type an object first.'); return; }
+  if(objMode==='replace'){
+    const r=$('#repText').value.trim(); if(!r){ toast('Say what to replace it with.'); return; }
+    editRender('replace',{target:t,replacement:r},'Replaced '+t.replace(/^the /,'').slice(0,14));
+  } else editRender('remove',{target:t},'Removed '+t.slice(0,18));
+};
 $('#stageGo').onclick=()=>editRender('stage',{density},'Furnished');
 
 /* --- story tools: budget, vastu, family vote --- */
@@ -1702,8 +1753,8 @@ async function drawGallery(){
   window.__recs = recs;
   body.innerHTML=`<div class="masonry">${recs.map((r,i)=>`
     <div class="gitem" data-open="${r.id}" style="animation-delay:${i*55}ms">
-      <img src="${r.after}" alt="${r.style} makeover">
-      <span class="peek">COMPARE</span>
+      <div class="ba"><img src="${r.before||r.after}" alt="Before"><img src="${r.after}" alt="${r.style} makeover"></div>
+      <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>
       <button class="del" data-k="${r.k||''}" data-id="${r.id}" aria-label="Delete">×</button>
       <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${r.room||'room'}${r.wall?' · '+r.wall+' walls':''}</span></div>
     </div>`).join('')}</div>
