@@ -230,6 +230,10 @@ body.selopen .gobar{display:none}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
 .chips .chip{scroll-snap-align:start;flex:none}
 .scrollrow{position:relative}
+.gitem:has(.vstrip) .meta{bottom:44px}
+.vstrip{position:relative;display:flex;gap:3px;align-items:center;padding:4px;background:#000}
+.vstrip img{width:calc((100% - 52px)/5);min-width:0;aspect-ratio:1;object-fit:cover;border-radius:4px;flex:1 1 0;max-width:34px;border:1px solid var(--line)}
+.vstrip b{font-size:10px;color:var(--brass);margin-left:auto;white-space:nowrap;padding-right:3px}
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
 @media (min-width:900px){.pgrid{grid-template-columns:repeat(6,1fr)}}
 .pitem{position:relative;border-radius:8px;overflow:hidden;cursor:pointer;aspect-ratio:3/4;background:var(--panel-sunk)}
@@ -579,6 +583,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 
     <div class="hr"></div>
     <button class="btn" id="save">Save to cloud</button>
+    <button class="btn ghost" id="restyle" style="margin-top:10px">Try another style on this photo</button>
   </div>
   </div>
   </div>
@@ -1899,6 +1904,7 @@ function renderStoryInto(body, st){
   if(m) countUp(m, st.total_cost||0, money);
 }
 
+$('#restyle').onclick=()=>{ S.selObj=null; S.dest=null; show('style'); buildStyleUI(); selUI(); toast('Pick another style. Saving adds it to the same photo (up to 5).'); };
 $('#resBack').onclick=()=>{ show('gallery'); drawGallery(); };
 
 /* ---------------------- gallery ---------------------- */
@@ -1994,13 +2000,15 @@ async function drawGallery(){
   body.innerHTML=photoHtml+(recs.length?'<div class="grouphead">Makeovers</div>'+filterHtml:'')+`<div class="masonry">${shown.map((r,i)=>`
     <div class="gitem" data-open="${r.id}" style="animation-delay:${i*55}ms">
       <div class="ba"><img src="${r.before||r.after}" alt="Before"><img src="${r.after}" alt="${r.style} makeover"></div>
-      <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>${(r.variants&&r.variants.length>1)?`<span class="tag" style="left:50%;transform:translateX(-50%);top:auto;bottom:44px;color:#C8A96A">${r.variants.length} of 5 makeovers</span>`:''}
+      <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>
       <button class="del" data-k="${r.k||''}" data-id="${r.id}" aria-label="Delete">×</button>
       <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${(r.tags&&r.tags.length)? r.tags.filter(t=>!/^Style:/.test(t)).slice(0,2).join(' · ')||(r.room||'room') : (r.room||'room')+(r.wall?' · '+r.wall+' walls':'')}</span></div>
+      ${(r.variants&&r.variants.length>1)?`<div class="vstrip" data-id="${r.id}">${r.variants.map((v,vi)=>`<img src="${v.after}" data-vi="${vi}" alt="Makeover ${vi+1}" title="${v.style}">`).join('')}<b>${r.variants.length} of 5</b></div>`:''}
     </div>`).join('')}</div>
   <p class="credit" style="margin-top:14px">${photos.length} photo${photos.length===1?'':'s'} · ${recs.length} room${recs.length===1?'':'s'} · only visible to ${S.user}</p>`;
   $$('#tagFilter .chip').forEach(b=>b.onclick=()=>{ window.__tagFilter=b.dataset.t; drawGallery(); });
-  $$('.pitem').forEach(t=>t.onclick=()=>{ const p=(window.__photos||[]).find(x=>x.id===t.dataset.p); if(p) onPhoto(p.img); });
+  $$('.vstrip img').forEach(im=>im.onclick=e=>{ e.stopPropagation(); const r=(window.__recs||[]).find(x=>x.id===im.parentNode.dataset.id); if(r) openSaved(r,+im.dataset.vi); });
+  $$('.pitem').forEach(t=>t.onclick=()=>{ const p=(window.__photos||[]).find(x=>x.id===t.dataset.p); if(p) onPhoto(p.img, 'b'+p.id); });
   $$('.pdel').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); await sdel('photo:'+b.dataset.p); window.__memp=(window.__memp||[]).filter(x=>x.id!==b.dataset.p); toast('Photo deleted.'); drawGallery(); });
   $$('.gitem[data-open]').forEach(t=>t.onclick=()=>{
     const r=(window.__recs||[]).find(x=>x.id===t.dataset.open); if(r) openSaved(r);
