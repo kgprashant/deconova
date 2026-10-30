@@ -135,9 +135,9 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 @media (prefers-reduced-motion:reduce){.masonry .gitem{opacity:1;animation:none}}
 
 /* ---------- nav ---------- */
-#nav{position:fixed;bottom:46px;left:0;right:0;max-width:520px;margin:0 auto;
+#nav{position:fixed;bottom:46px;left:0;right:0;max-width:560px;margin:0 auto;
   background:var(--panel);border-top:1px solid var(--line);display:none;
-  grid-template-columns:1fr 1fr 1fr;align-items:center;padding:8px 0 max(8px,env(safe-area-inset-bottom));z-index:40}
+  grid-template-columns:1fr 1fr 1fr 1fr;align-items:center;padding:8px 0 max(8px,env(safe-area-inset-bottom));z-index:40}
 #nav.on{display:grid}
 #nav button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--ink-soft);padding:6px 0}
 #nav button.sel{color:var(--ink);font-weight:600}
@@ -200,6 +200,12 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
 .chips .chip{scroll-snap-align:start;flex:none}
 .scrollrow{position:relative}
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+@media (min-width:900px){.pgrid{grid-template-columns:repeat(6,1fr)}}
+.pitem{position:relative;border-radius:8px;overflow:hidden;cursor:pointer;aspect-ratio:3/4;background:var(--panel-sunk)}
+.pitem img{width:100%;height:100%;object-fit:cover;display:block}
+.pitem .pmk{position:absolute;left:6px;right:6px;bottom:6px;text-align:center;background:rgba(18,17,16,.7);color:var(--brass);font-size:11px;letter-spacing:.06em;padding:5px;border-radius:6px}
+.pdel{position:absolute;top:5px;right:5px;width:26px;height:26px;border-radius:50%;background:rgba(18,17,16,.7);color:#F2EEE7;font-size:16px}
 .sarrow{display:none;position:absolute;top:2px;width:34px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(18,17,16,.92);color:var(--ink);font-size:20px;z-index:2}
 .sarrow.l{left:-6px}.sarrow.r{right:-6px}
 @media (hover:hover) and (pointer:fine){ .sarrow{display:grid;place-items:center} }
@@ -403,6 +409,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div style="height:10px"></div>
     <button class="btn ghost" id="pickBtn">Choose from photos</button>
     <input type="file" id="pick" accept="image/*" hidden>
+    <input type="file" id="upl" accept="image/*" multiple hidden>
     <p class="credit" style="margin-top:14px" id="camnote"></p>
   </div>
 </section>
@@ -539,7 +546,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 
 <!-- ============ GALLERY ============ -->
 <section class="screen" id="s-gallery">
-  <div class="topbar"><h2>Gallery</h2><button class="back" id="newFromGallery">Choose from photos</button></div>
+  <div class="topbar"><h2>Cloud</h2><button class="back" id="newFromGallery">Upload photos</button></div>
   <div class="pad" style="padding-top:8px"><div id="galleryBody"></div></div>
 </section>
 
@@ -585,7 +592,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <!-- ============ NAV ============ -->
 <div id="nav">
   <button data-go="capture"><div class="ring"><i></i></div>Capture</button>
-  <button data-go="gallery">▦<br>Gallery</button>
+  <button data-go="upload">▣<br>Gallery</button>
+  <button data-go="gallery">☁<br>Cloud</button>
   <button data-go="you">◉<br>You</button>
 </div>
 
@@ -808,6 +816,7 @@ function show(name){
 }
 $$('#nav button').forEach(b=>b.onclick=()=>{
   const g=b.dataset.go;
+  if(g==='upload'){ stopCam(); $('#upl').click(); return; }
   if(g==='capture') startCapture(); else show(g);
   if(g==='gallery') drawGallery();
   if(g==='you') drawYou();
@@ -1759,6 +1768,22 @@ $('#save').onclick = async ()=>{
   if(!ok){ (window.__mem=window.__mem||[]).push(rec); }
   show('gallery'); drawGallery();
 };
+async function uploadPhotos(files){
+  let n=0; toast('Uploading to your cloud…');
+  for(const f of files){
+    try{
+      const url=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(f); });
+      const img=await thumb(url,1100);
+      const id='p'+Date.now()+Math.floor(Math.random()*1000);
+      const ok=await sset('photo:'+id,{id,at:new Date().toISOString(),img});
+      if(!ok) (window.__memp=window.__memp||[]).push({id,at:new Date().toISOString(),img});
+      n++;
+    }catch(e){}
+  }
+  show('gallery'); await drawGallery();
+  toast(n? `${n} photo${n>1?'s':''} uploaded. Tap one to make it over.` : 'Could not read those photos.');
+}
+$('#upl').onchange=e=>{ const fs=[...e.target.files]; e.target.value=''; if(fs.length) uploadPhotos(fs); };
 async function drawGallery(){
   const body=$('#galleryBody'); body.innerHTML='<p class="soft">Loading…</p>';
   const keys=await slist('room:');
@@ -1766,19 +1791,28 @@ async function drawGallery(){
   for(const k of keys){ try{ const r=await store.get(k); if(r) recs.push({k,...JSON.parse(r.value)}); }catch(e){} }
   recs = recs.concat((window.__mem||[]).map(r=>({k:null,...r})));
   recs.sort((a,b)=> (b.at||'').localeCompare(a.at||''));
-  if(!recs.length){
-    body.innerHTML=`<div class="empty"><h2>Nothing here yet</h2><p class="soft" style="margin:10px 0 20px">Photograph a room and pick a style.</p><button class="btn sig" onclick="document.querySelector('[data-go=capture]').click()">Capture a room</button></div>`;
+  const pkeys=await slist('photo:');
+  let photos=[];
+  for(const k of pkeys){ try{ const r=await store.get(k); if(r) photos.push(JSON.parse(r.value)); }catch(e){} }
+  photos=photos.concat(window.__memp||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
+  window.__photos=photos;
+  const photoHtml = photos.length ? `<div class="grouphead" style="margin-top:6px">Your photos</div>
+    <div class="pgrid">${photos.map(p=>`<div class="pitem" data-p="${p.id}"><img src="${p.img}" alt="Uploaded room photo"><span class="pmk">Make over</span><button class="pdel" data-p="${p.id}" aria-label="Delete photo">×</button></div>`).join('')}</div>` : '';
+  if(!recs.length && !photos.length){
+    body.innerHTML=`<div class="empty"><h2>Your cloud is empty</h2><p class="soft" style="margin:10px 0 20px">Upload photos from your device, or capture a room.</p><button class="btn sig" onclick="document.querySelector('[data-go=upload]').click()">Upload photos</button></div>`;
     return;
   }
   window.__recs = recs;
-  body.innerHTML=`<div class="masonry">${recs.map((r,i)=>`
+  body.innerHTML=photoHtml+(recs.length?'<div class="grouphead">Makeovers</div>':'')+`<div class="masonry">${recs.map((r,i)=>`
     <div class="gitem" data-open="${r.id}" style="animation-delay:${i*55}ms">
       <div class="ba"><img src="${r.before||r.after}" alt="Before"><img src="${r.after}" alt="${r.style} makeover"></div>
       <span class="tag" style="left:7px">BEFORE</span><span class="tag" style="right:7px">AFTER</span>
       <button class="del" data-k="${r.k||''}" data-id="${r.id}" aria-label="Delete">×</button>
       <div class="meta">${r.style}${r.pack&&r.pack!=='No one in particular'?' · '+r.pack:''}<br><span style="font-weight:400;opacity:.85">${r.room||'room'}${r.wall?' · '+r.wall+' walls':''}</span></div>
     </div>`).join('')}</div>
-  <p class="credit" style="margin-top:14px">${recs.length} room${recs.length>1?'s':''} · only visible to ${S.user}</p>`;
+  <p class="credit" style="margin-top:14px">${photos.length} photo${photos.length===1?'':'s'} · ${recs.length} room${recs.length===1?'':'s'} · only visible to ${S.user}</p>`;
+  $$('.pitem').forEach(t=>t.onclick=()=>{ const p=(window.__photos||[]).find(x=>x.id===t.dataset.p); if(p) onPhoto(p.img); });
+  $$('.pdel').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); await sdel('photo:'+b.dataset.p); window.__memp=(window.__memp||[]).filter(x=>x.id!==b.dataset.p); toast('Photo deleted.'); drawGallery(); });
   $$('.gitem[data-open]').forEach(t=>t.onclick=()=>{
     const r=(window.__recs||[]).find(x=>x.id===t.dataset.open); if(r) openSaved(r);
   });
@@ -1789,7 +1823,7 @@ async function drawGallery(){
     toast('Deleted. The photo is gone too.'); drawGallery();
   });
 }
-$('#newFromGallery').onclick=()=>$('#pick').click();
+$('#newFromGallery').onclick=()=>$('#upl').click();
 
 /* ---------------------- saved room, read only ---------------------- */
 let svCur=null;
@@ -1871,9 +1905,9 @@ $('#clearHistory').onclick = async ()=>{
   }
   armDelete=false;
   $('#clearHistory').innerHTML='<span>Delete all photos and designs</span><span class="soft">\u2192</span>';
-  const keys=await slist('room:');
+  const keys=(await slist('room:')).concat(await slist('photo:'));
   for(const k of keys){ try{ await store.delete(k); }catch(e){} }
-  window.__mem=[]; S.versions=[]; S.original=null;
+  window.__mem=[]; window.__memp=[]; S.versions=[]; S.original=null;
   toast('Everything deleted.'); drawGallery(); show('gallery');
 };
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) navigator.serviceWorker.register('sw.js').catch(()=>{});
