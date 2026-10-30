@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.netlify.stirring_piroshki_b4494b.twa",
+        "sha256_cert_fingerprints": ["7D:03:82:B1:A5:4B:04:F4:C8:D6:7E:FD:9B:E6:E7:5A:A4:7C:CF:6B:3B:F6:D4:DD:B1:9E:26:41:48:22:66:17"]
+      }
+    }]
