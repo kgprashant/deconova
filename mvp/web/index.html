@@ -196,6 +196,9 @@ input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r
 .selbar{position:fixed;left:12px;right:12px;bottom:138px;max-width:520px;margin:0 auto;z-index:60;padding:12px;border:1px solid var(--brass);border-radius:14px;background:var(--panel);box-shadow:0 8px 30px rgba(0,0,0,.55)}
 .selbar[hidden]{display:none}
 .selbar .seg{margin:8px 0}
+#selGrip{touch-action:none;cursor:grab;padding:2px 0 8px;display:flex;justify-content:center;margin-top:-4px}
+#selGrip i{width:46px;height:5px;border-radius:3px;background:var(--line);display:block}
+#selGrip:active{cursor:grabbing}
 .selbar .credit{margin:4px 0 8px}
 .selbar .btn{margin:0}
 body.selopen .gobar{display:none}
@@ -450,6 +453,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"><div id="identify" hidden><i class="spin"></i><span>Identifying objects…</span></div></div>
     <p class="credit" id="readnote" style="margin-top:10px">Reading the room…</p>
     <div class="selbar" id="selbar" hidden>
+      <div id="selGrip" title="Drag to move" aria-label="Drag to move this panel"><i></i></div>
       <div class="selhead"><b id="selTitle"></b><button class="back" id="selClear" type="button">Change object</button></div>
       <div class="seg" id="selMode"><button type="button" class="chip sel" data-m="remove">Remove</button><button type="button" class="chip" data-m="replace">Replace</button><button type="button" class="chip" data-m="move">Move</button></div>
       <input type="text" id="selRep" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
@@ -1178,6 +1182,7 @@ function selUI(){
     d.style.left=(r.left-wr.left+r.width*S.dest.x/100)+'px'; d.style.top=(r.top-wr.top+r.height*S.dest.y/100)+'px'; w.appendChild(d);
   }
   const bar=$('#selbar'); bar.hidden=!S.selObj; document.body.classList.toggle('selopen',!!S.selObj&&S.screen==='style'); if(!S.selObj) return;
+  if(window.applySelPos) applySelPos();
   $('#selTitle').textContent='Selected: '+S.selObj.name;
   $$('#selMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===selMode));
   $('#selRep').hidden=selMode!=='replace';
@@ -1185,6 +1190,16 @@ function selUI(){
   $('#selHint').textContent = selMode==='move' ? (S.dest?'Destination marked. Tap the photo again to change it.':'Tap the photo where it should go.')
     : selMode==='replace' ? 'Type what should take its place.' : 'It will be erased and the wall or floor filled in.';
 }
+(function(){
+  const bar=$('#selbar'), grip=$('#selGrip'); let sx=0,sy=0,ox=0,oy=0,on=false;
+  window.applySelPos=()=>{ if(!S.selPos) return; bar.style.left=S.selPos.x+'px'; bar.style.top=S.selPos.y+'px'; bar.style.right='auto'; bar.style.bottom='auto'; bar.style.margin='0'; };
+  grip.addEventListener('pointerdown',e=>{ const r=bar.getBoundingClientRect(); on=true; sx=e.clientX; sy=e.clientY; ox=r.left; oy=r.top; grip.setPointerCapture(e.pointerId); e.preventDefault(); });
+  grip.addEventListener('pointermove',e=>{ if(!on) return; const r=bar.getBoundingClientRect();
+    const x=Math.max(4,Math.min(innerWidth-r.width-4,ox+e.clientX-sx)), y=Math.max(4,Math.min(innerHeight-r.height-4,oy+e.clientY-sy));
+    S.selPos={x,y}; applySelPos(); });
+  const end=()=>{ on=false; }; grip.addEventListener('pointerup',end); grip.addEventListener('pointercancel',end);
+  addEventListener('resize',()=>{ if(S.selPos){ const r=bar.getBoundingClientRect(); S.selPos.x=Math.max(4,Math.min(innerWidth-r.width-4,S.selPos.x)); S.selPos.y=Math.max(4,Math.min(innerHeight-r.height-4,S.selPos.y)); applySelPos(); } });
+})();
 $$('#selMode .chip').forEach(b=>b.onclick=()=>{ selMode=b.dataset.m; S.dest=null; selUI(); });
 $('#selClear').onclick=()=>{ S.selObj=null; S.dest=null; selUI(); };
 $('#readwrap').addEventListener('click',ev=>{ if(selMode==='move' && S.selObj && !ev.target.closest('.brk')) setDest2(ev); });
@@ -1220,7 +1235,7 @@ function paintBrackets(){
     const d=document.createElement('div'); d.className='brk';
     d.style.cssText=`left:${l}%;top:${t}%;width:${ww}%;height:${hh}%;animation-delay:${i*130}ms`;
     d.innerHTML='<span>'+o.name+'</span>'; d.dataset.i=i;
-    d.onclick=ev=>{ ev.stopPropagation(); if(selMode==='move' && S.selObj){ setDest2(ev); return; } S.selObj=o; S.dest=null; selUI(); };
+    d.onclick=ev=>{ ev.stopPropagation(); if(S.selObj===o){ S.selObj=null; S.dest=null; selUI(); return; } if(selMode==='move' && S.selObj){ setDest2(ev); return; } S.selObj=o; S.dest=null; selUI(); };
     w.appendChild(d);
   });
   selUI();
@@ -1597,6 +1612,7 @@ function paintPick(){
     const [x,y,w,h]=o.box; const b=document.createElement('button'); b.type='button'; b.className='obox'+(S.selObj===o?' sel':'');
     b.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`; b.innerHTML='<span>'+o.name+'</span>';
     b.onclick=ev=>{
+      if(S.selObj===o){ S.selObj=null; S.dest=null; $('#rmText').value=''; paintPick(); hintText(); return; }
       if(objMode==='move' && S.selObj){ setDest(ev); return; }
       S.selObj=o; S.dest=null; $('#rmText').value='the '+o.name; paintPick(); hintText();
     };
