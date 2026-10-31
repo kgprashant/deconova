@@ -65,7 +65,7 @@ a{text-decoration:none;color:inherit}
 .btn.sm{padding:9px 14px;width:auto;font-size:14px}
 :focus-visible{outline:2px solid var(--signal);outline-offset:2px;border-radius:4px}
 
-input[type=email],input[type=text]{width:100%;padding:14px;border-radius:var(--r-control);
+input[type=email],input[type=text],input[type=password]{width:100%;padding:14px;border-radius:var(--r-control);
   border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
 
 
@@ -692,6 +692,13 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="card">
       <div style="font-weight:600" id="whoami"></div>
       <div class="credit" id="creditsLeft"></div>
+    </div>
+    <button class="rowbtn" id="pwToggle"><span id="pwLabel">Change password</span><span class="soft">→</span></button>
+    <div id="pwForm" class="card" hidden style="margin-top:8px">
+      <p class="credit" id="pwNote" style="margin-bottom:10px"></p>
+      <input type="password" id="pwNew" placeholder="New password (min 6 characters)" autocomplete="new-password" maxlength="72" aria-label="New password">
+      <input type="password" id="pwNew2" placeholder="Repeat the new password" autocomplete="new-password" maxlength="72" aria-label="Repeat the new password" style="margin-top:8px">
+      <button class="btn sig" id="pwSave" type="button" style="margin-top:10px">Save password</button>
     </div>
     <div class="hr"></div>
     <button class="rowbtn" id="clearHistory"><span>Delete all photos and designs</span><span class="soft">→</span></button>
@@ -2389,7 +2396,29 @@ $('#svDelete').onclick=async ()=>{
 };
 
 /* ---------------------- you ---------------------- */
+async function drawPw(){
+  $('#pwForm').hidden=true; $('#pwNew').value=''; $('#pwNew2').value='';
+  let google=false;
+  if(sb){ try{ const {data}=await sb.auth.getUser(); const pr=(data&&data.user&&data.user.app_metadata&&data.user.app_metadata.providers)||[]; google=pr.includes('google')&&!pr.includes('email'); }catch(e){} }
+  $('#pwToggle').hidden=!sb;
+  $('#pwLabel').textContent=google?'Set a password':'Change password';
+  $('#pwNote').textContent=google?'You signed in with Google. Set a password to also sign in with your email or mobile number. Google sign-in keeps working.':'Choose a new password for your email and mobile number sign-in.';
+}
+$('#pwToggle').onclick=()=>{ const f=$('#pwForm'); f.hidden=!f.hidden; if(!f.hidden) $('#pwNew').focus(); };
+$('#pwSave').onclick=async ()=>{
+  const a=$('#pwNew').value, b=$('#pwNew2').value;
+  if(a.length<6) return toast('Password needs at least 6 characters.');
+  if(a!==b) return toast('The two passwords do not match.');
+  $('#pwSave').disabled=true;
+  try{
+    const {error}=await sb.auth.updateUser({password:a});
+    if(error){ toast(/reauth|recent|nonce/i.test(error.message)?'For safety, sign out and sign in again, then change the password.':'Could not change it: '+error.message); return; }
+    toast('Password saved.'); await drawPw();
+  }catch(e){ toast('Could not reach the server.'); }
+  finally{ $('#pwSave').disabled=false; }
+};
 function drawYou(){
+  drawPw();
   $('#whoami').textContent=S.user||'';
   $('#creditsLeft').textContent=S.credits+' credits left in this prototype';
 }
