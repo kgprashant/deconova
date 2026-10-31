@@ -963,6 +963,18 @@ const store = sb ? {
   async list(p){ const keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith('dn:'+p)) keys.push(k.slice(3)); } return {keys}; }
 };
 
+/* image renders: if the model fails the server refunds the credit, so retry up to 3 times with a fresh request id */
+async function renderEdge(body){
+  let d=null;
+  for(let n=0;n<3;n++){
+    d=await callEdge('generate',{...body, request_id:rid()});
+    if(!d||d.ok||d.code!=='render_failed') return d;
+    if(typeof d.credits_left==='number') S.credits=d.credits_left;
+    if(n<2) await new Promise(r=>setTimeout(r,1500*(n+1)));
+  }
+  d.message='The image model is busy and could not finish after 3 tries. Your credit was refunded. Please try again in a minute.';
+  return d;
+}
 async function callEdge(name, body){
   if(!sb) throw new Error('no_backend');
   const {data,error}=await sb.functions.invoke(name,{body});
@@ -1288,7 +1300,7 @@ async function preEdit(mode, extra, label){
   if(!REAL){ toast('Edits need the image model. Connect it first — see the README.'); return; }
   runLoader(['Editing your room','Keeping walls, windows and camera angle']);
   try{
-    const d=await callEdge('generate',{mode, image:S.original.split(',')[1], style_id:null, pack_id:S.pack, decor:[], room:S.read, request_id:rid(), ...extra});
+    const d=await renderEdge({mode, image:S.original.split(',')[1], style_id:null, pack_id:S.pack, decor:[], room:S.read, request_id:rid(), ...extra});
     if(typeof (d&&d.credits_left)==='number'){ S.credits=d.credits_left; await sset('credits:'+S.user,S.credits); }
     if(!d || !d.ok){ toast((d&&d.message)||'The render did not finish.'); return; }
     const url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original);
@@ -1439,7 +1451,7 @@ $('#go').onclick = async ()=>{
   let url=null, real=false;
   if(REAL){
     try{
-      const d=await callEdge('generate',{mode:'restyle', image:S.original.split(',')[1], style_id:s.id,
+      const d=await renderEdge({mode:'restyle', image:S.original.split(',')[1], style_id:s.id,
         pack_id:S.pack, decor:planDecor(), room:S.read, request_id:rid()});
       if(d && d.ok){ url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original); real=true; S.credits=d.credits_left; }
       else if(d){ toast(d.message||'The render did not finish.'); if(typeof d.credits_left==='number') S.credits=d.credits_left; }
@@ -1669,7 +1681,7 @@ async function editRender(mode, extra, label){
   if(!REAL){ toast('Edits need the image model. Connect it first — see the README.'); return; }
   runLoader(['Editing your room','Keeping walls, windows and camera angle']);
   try{
-    const d=await callEdge('generate',{mode, image:currentUrl().split(',')[1], style_id:S.style, pack_id:S.pack,
+    const d=await renderEdge({mode, image:currentUrl().split(',')[1], style_id:S.style, pack_id:S.pack,
       decor:[...S.decor], room:S.read, request_id:rid(), ...extra});
     if(typeof (d&&d.credits_left)==='number'){ S.credits=d.credits_left; await sset('credits:'+S.user,S.credits); }
     if(!d || !d.ok){ toast((d&&d.message)||'The render did not finish.'); return; }
