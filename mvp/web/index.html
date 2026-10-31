@@ -433,6 +433,10 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 #iosHint{position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:80;background:#1d1c1a;color:#f2eee7;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.35;box-shadow:0 8px 28px rgba(0,0,0,.5)}
 #iosHint[hidden]{display:none}
 #iosHint button{float:right;margin-left:10px;background:none;border:0;color:inherit;font-size:20px;line-height:1}
+#lightFx{position:absolute;inset:0;pointer-events:none;z-index:3;transition:opacity .35s var(--ease,ease)}
+.lightsbtn{position:absolute;left:10px;top:10px;z-index:7;border:0;border-radius:999px;padding:9px 14px;font:600 13.5px/1 inherit;font-family:inherit;cursor:pointer;
+  background:rgba(18,17,16,.72);color:#f2eee7;border:1px solid rgba(255,255,255,.25);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.lightsbtn[aria-pressed="true"]{background:#f1c76b;color:#1b1608;border-color:#f1c76b;box-shadow:0 0 18px rgba(241,199,107,.55)}
 </style>
 
 <div id="app">
@@ -539,7 +543,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div id="reveal">
     <img id="revBase" alt="Makeover result">
     <div id="revTop"><img id="revTopImg" alt="Original room"></div>
-    <div id="newObjs"></div><div id="tempveil"></div>
+    <div id="newObjs"></div><div id="tempveil"></div><div id="lightFx"></div><button type="button" id="lightsBtn" class="lightsbtn" aria-pressed="true" aria-label="Turn the lights off"><span id="lightsIco">&#128161;</span> <span id="lightsTxt">Lights on</span></button>
     <div id="seam"></div>
     <button id="handle" aria-label="Drag to compare" tabindex="0">↔</button>
     <span class="tag" id="tagB">BEFORE</span><span class="tag" id="tagA">AFTER</span>
@@ -1624,7 +1628,7 @@ function loadFrames(){
   const a=f[S.compare[1]]||f[f.length-1], b=f[S.compare[0]]||f[0];
   $('#revBase').src=a.url; $('#revTopImg').src=b.url;
   $('#tagA').textContent=a.label.toUpperCase(); $('#tagB').textContent=b.label.toUpperCase();
-  setPos(50);
+  setPos(50); if(typeof paintLights==='function') paintLights();
 }
 function drawVersions(){
   const row=$('#vrow'); row.innerHTML='';
@@ -1641,7 +1645,7 @@ let pos=50, lastTick=0;
 function setPos(p){
   pos=clamp(p,0,100);
   $('#revTop').style.clipPath=`inset(0 ${100-pos}% 0 0)`;
-  $('#tempveil').style.clipPath=`inset(0 0 0 ${pos}%)`;
+  $('#tempveil').style.clipPath=`inset(0 0 0 ${pos}%)`; $('#lightFx').style.clipPath=`inset(0 0 0 ${pos}%)`;
   $('#seam').style.left=pos+'%'; $('#handle').style.left=pos+'%';
   $('#tagB').style.opacity = pos>18? 1:0.15;
   $('#tagA').style.opacity = pos<82? 1:0.15;
@@ -2095,11 +2099,50 @@ function applyLight(){
   const [c,a]=kelvinTint(S.kelvin);
   $('#tempveil').style.background=c; $('#tempveil').style.opacity=a;
   const ev=S.ev/10;
-  const f=`brightness(${1+ev*0.16}) contrast(${1+Math.abs(ev)*0.03})`;
+  const on=S.lights!=='off';
+  const f=`brightness(${(1+ev*0.16)*(on?1.05:0.93)}) contrast(${1+Math.abs(ev)*0.03+(on?0.02:0.03)}) saturate(${on?1.1:0.9})`;
   $('#revBase').style.filter=f;
+  paintLights();
   $('#kLabel').textContent=`${S.kelvin} K · ${kelvinLabel(S.kelvin)}`;
   $('#evLabel').textContent=`${(ev>=0?'+':'')}${ev.toFixed(1)} stops`;
 }
+/* --- lights on / off: instant, free approximation on the makeover frame --- */
+const spotCache=new Map();
+function lightSpots(url){
+  if(spotCache.has(url)) return Promise.resolve(spotCache.get(url));
+  return new Promise(res=>{
+    const im=new Image(); im.onload=()=>{
+      const W=40,H=30, c=document.createElement('canvas'); c.width=W; c.height=H; const g=c.getContext('2d',{willReadFrequently:true});
+      g.drawImage(im,0,0,W,H); const d=g.getImageData(0,0,W,H).data, L=[];
+      for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=(y*W+x)*4; L.push(0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2]); }
+      const cand=[]; for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){ const v=L[y*W+x]; if(v<190) continue;
+        let m=true; for(let dy=-2;dy<=2&&m;dy++) for(let dx=-2;dx<=2;dx++){ const yy=y+dy,xx=x+dx; if(yy<0||xx<0||yy>=H||xx>=W) continue; if(L[yy*W+xx]>v){ m=false; break; } }
+        if(m) cand.push({x:(x+.5)/W*100,y:(y+.5)/H*100,v}); }
+      cand.sort((a,b)=>b.v-a.v); const out=[];
+      cand.forEach(q=>{ if(out.length<4&&out.every(o=>Math.hypot(o.x-q.x,o.y-q.y)>22)) out.push(q); });
+      spotCache.set(url,out); res(out);
+    }; im.onerror=()=>res([]); im.src=url;
+  });
+}
+async function paintLights(){
+  const fx=$('#lightFx'); if(!fx) return;
+  const on=S.lights!=='off';
+  $('#lightsBtn').setAttribute('aria-pressed',on); $('#lightsTxt').textContent=on?'Lights on':'Lights off';
+  $('#lightsBtn').setAttribute('aria-label',on?'Turn the lights off':'Turn the lights on'); $('#lightsIco').innerHTML=on?'&#128161;':'&#9728;&#65039;';
+  const f=frames(); const cur=f[S.compare[1]]||f[f.length-1]; if(!cur) return;
+  const spots=await lightSpots(cur.url);
+  if(on){
+    fx.style.mixBlendMode='screen';
+    const glows=spots.map(q=>`radial-gradient(circle at ${q.x}% ${q.y}%, rgba(255,205,130,.55) 0, rgba(255,184,96,.28) 9%, rgba(255,170,80,0) 30%)`);
+    fx.style.background=[...glows,'linear-gradient(rgba(255,170,80,.10),rgba(255,150,60,.14))'].join(',');
+  } else {
+    fx.style.mixBlendMode='soft-light';
+    const sun=spots.slice(0,2).map(q=>`radial-gradient(ellipse at ${q.x}% ${q.y}%, rgba(210,228,255,.55) 0, rgba(190,215,255,.25) 28%, rgba(190,215,255,0) 70%)`);
+    fx.style.background=[...sun,'linear-gradient(rgba(170,195,235,.30),rgba(150,175,215,.22))'].join(',');
+  }
+}
+$('#lightsBtn').onclick=e=>{ e.stopPropagation(); S.lights=(S.lights==='off')?'on':'off'; applyLight(); haptic(8); };
+$('#lightsBtn').addEventListener('pointerdown',e=>e.stopPropagation());
 $('#kelvin').oninput=e=>{ S.kelvin=+e.target.value; applyLight(); };
 $('#ev').oninput=e=>{ S.ev=+e.target.value; applyLight(); };
 $('#resetLight').onclick=()=>{ S.kelvin=3200; S.ev=0; $('#kelvin').value=3200; $('#ev').value=0; applyLight(); };
