@@ -8,7 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="DecoNova">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600&display=swap');
 
@@ -426,6 +430,9 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 #buySheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px}
 .buyrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(128,128,128,.25)}
 .buyrow a{white-space:nowrap;text-decoration:underline;text-underline-offset:3px}
+#iosHint{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:80;background:#1d1c1a;color:#f2eee7;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.35;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+#iosHint[hidden]{display:none}
+#iosHint button{float:right;margin-left:10px;background:none;border:0;color:inherit;font-size:20px;line-height:1}
 </style>
 
 <div id="app">
@@ -718,6 +725,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <div class="toast" id="toast"></div>
 </div>
 
+<div id="iosHint" hidden><button type="button" id="iosHintX" aria-label="Close">&times;</button>Install DecoNova on your iPhone: tap <b>Share</b> <span aria-hidden="true">&#11014;&#65039;</span> then <b>Add to Home Screen</b>.</div>
 <div id="aiSheet" hidden><div class="aibox" role="dialog" aria-label="Ask AI">
   <div class="aihead"><b style="font-size:18px">&#10024; Ask AI</b><button class="back" type="button" id="aiClose">Close</button></div>
   <div id="aiBody"></div>
@@ -2386,5 +2394,14 @@ $('#clearHistory').onclick = async ()=>{
   window.__mem=[]; window.__memp=[]; S.versions=[]; S.original=null;
   toast('Everything deleted.'); drawGallery(); show('gallery');
 };
+(function iosInstallHint(){
+  try{
+    const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+    if(!ios||standalone||localStorage.getItem('dn:iosHint')) return;
+    setTimeout(()=>{ $('#iosHint').hidden=false; },4000);
+    $('#iosHintX').onclick=()=>{ $('#iosHint').hidden=true; try{ localStorage.setItem('dn:iosHint','1'); }catch(e){} };
+  }catch(e){}
+})();
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
