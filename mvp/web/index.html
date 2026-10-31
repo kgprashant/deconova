@@ -421,6 +421,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .aicard.on{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal) inset}
 .aicard.on .pick{background:var(--signal);box-shadow:0 0 0 3px var(--panel,#fff) inset}
 .aifoot{position:sticky;bottom:-22px;margin:12px -16px -22px;padding:12px 16px 18px;background:var(--panel,#fff)}
+#buySheet{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+#buySheet[hidden]{display:none}
+#buySheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px}
+.buyrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(128,128,128,.25)}
+.buyrow a{white-space:nowrap;text-decoration:underline;text-underline-offset:3px}
 </style>
 
 <div id="app">
@@ -537,6 +542,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="grouphead" style="font-size:18px">&#128176; Makeover cost</div>
     <label class="chkrow"><input type="checkbox" id="showObjs"> <span>Show new objects</span></label>
     <div id="costList"></div>
+    <button class="btn sig" id="buyBtn" type="button" style="margin-top:10px">&#128722; Buy these items</button>
   </div>
   <div class="simnote" id="simnote">Simulated render — the real build sends this frame to the image model. Wall colour, light, contrast checks and the story below are live.</div>
   </div>
@@ -706,6 +712,10 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <div id="aiSheet" hidden><div class="aibox" role="dialog" aria-label="Ask AI">
   <div class="aihead"><b style="font-size:18px">&#10024; Ask AI</b><button class="back" type="button" id="aiClose">Close</button></div>
   <div id="aiBody"></div>
+</div></div>
+<div id="buySheet" class="buysheet" hidden><div class="aibox" role="dialog" aria-label="Buy items">
+  <div class="aihead"><b style="font-size:18px">&#128722; Buy</b><button class="back" type="button" id="buyClose">Close</button></div>
+  <div id="buyBody"></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
@@ -1901,6 +1911,47 @@ $('#askAi').onclick=async ()=>{
     aiPlans=d.result.plans; aiKey=key; aiDraw(d.result);
   }catch(e){ $('#aiBody').innerHTML='<p>Could not reach the server.</p><button class="btn" id="aiRetry">Try again</button>'; $('#aiRetry').onclick=()=>$('#askAi').onclick(); }
 };
+
+/* --- Buy: Amazon or Google Shopping for every ticked item --- */
+const IS_MOBILE=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const IS_ANDROID=/Android/i.test(navigator.userAgent);
+function buyUrl(store,name,app){
+  const q=encodeURIComponent(String(name).slice(0,80));
+  if(store==='amazon'){
+    const web='https://www.amazon.in/s?k='+q;
+    if(app&&IS_ANDROID) return 'intent://www.amazon.in/s?k='+q+'#Intent;scheme=https;package=in.amazon.mShop.android.shopping;S.browser_fallback_url='+encodeURIComponent(web)+';end';
+    return web; /* iPhone opens the Amazon app from this link by itself when installed */
+  }
+  return 'https://www.google.com/search?tbm=shop&q='+q+'+buy+online+India';
+}
+function buyItems(){ return S.cost? S.cost.items.filter(i=>i.on).map(i=>i.name) : []; }
+$('#buyClose').onclick=()=>{ $('#buySheet').hidden=true; };
+$('#buySheet').addEventListener('click',e=>{ if(e.target.id==='buySheet') e.target.hidden=true; });
+$('#buyBtn').onclick=()=>{
+  const names=buyItems(); if(!names.length){ toast('Tick at least one item to buy.'); return; }
+  $('#buyBody').innerHTML=`<p class="credit">${names.length} item${names.length===1?'':'s'} selected: ${esc(names.join(', '))}. Where do you want to see them?</p>
+    <div class="chips" style="gap:10px;margin-top:8px;flex-wrap:wrap"><button class="btn sig" id="buyAmz" style="flex:1">Amazon</button><button class="btn" id="buyGoog" style="flex:1">Google Shopping</button></div>
+    <p class="credit" style="margin-top:10px">${IS_MOBILE?'On your phone, Amazon opens in the Amazon app. Google Shopping opens one browser tab per item.':'Each item opens in its own browser tab so you can compare and order.'} Prices there may differ from the estimates here.</p>`;
+  $('#buySheet').hidden=false;
+  $('#buyAmz').onclick=()=>buyGo('amazon');
+  $('#buyGoog').onclick=()=>buyGo('google');
+};
+function buyGo(store){
+  const names=buyItems(); let blocked=false;
+  const appMode=IS_MOBILE&&store==='amazon';
+  if(appMode){
+    /* the app can show one search at a time: open the first, list the rest as taps */
+    if(IS_ANDROID) location.href=buyUrl('amazon',names[0],true);
+    else { const w=window.open(buyUrl('amazon',names[0],true),'_blank'); if(!w) blocked=true; }
+  } else {
+    names.forEach(n=>{ const w=window.open(buyUrl(store,n,false),'_blank'); if(!w) blocked=true; });
+  }
+  const label=store==='amazon'?'Amazon':'Google Shopping';
+  $('#buyBody').innerHTML=`<p class="credit">${appMode?`Opened ${esc(names[0])} in the Amazon app. Tap the others to open them one by one.`:(blocked?'Your browser blocked some tabs. Tap each item below to open it.':`Opened ${names.length} tab${names.length===1?'':'s'} on ${label}. Tap an item below to open it again.`)}</p>`+
+    names.map((n,i)=>`<div class="buyrow"><span>${esc(n)}</span><a href="${buyUrl(store,n,appMode)}" target="_blank" rel="noopener noreferrer">Open on ${label}</a></div>`).join('')+
+    `<div class="chips" style="margin-top:12px"><button class="chip" id="buyBack">Choose another store</button></div>`;
+  $('#buyBack').onclick=()=>$('#buyBtn').onclick();
+}
 
 /* --- tabs --- */
 $$('.tabs button').forEach(b=>b.onclick=()=>{
