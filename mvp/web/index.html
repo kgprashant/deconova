@@ -906,7 +906,12 @@ const PACKS = [
   {id:'wfh', label:'Someone working from home', note:'A defined desk zone, glare-free window relationship, task light, acoustic softening.'}
 ];
 
-const DECOR = ['Plants','Gallery wall','Floor lamp','Bookshelf','Rug','Sheer curtains','Pooja corner','Reading chair','Mirror','Storage bench'];
+const DECOR = ['Plants','Gallery wall','Floor lamp','Bookshelf','Rug','Sheer curtains','Pooja corner','Reading chair','Mirror','Storage bench',
+  'Sofa','Coffee table','Side table','Accent chair','Console table','TV unit','Dining table','Study desk','Wardrobe','Shoe rack',
+  'Pendant light','Chandelier','Table lamp','Wall sconces','Fairy lights','Wall art','Wall clock','Throw pillows','Throw blanket','Floor cushions',
+  'Pouf','Ottoman','Bean bag','Swing chair','Daybed','Bar cart','Room divider','Floating shelves','Hanging planters','Indoor tree',
+  'Brass urli','Wall panelling','Blackout curtains','Jute rug'];
+const MAX_DECOR=10;
 const RELIGHT = ['Morning','Midday','Golden hour','Dusk, lamps on','Night, lamps on'];
 
 /* ---------------------- tiny helpers ---------------------- */
@@ -1361,9 +1366,7 @@ function buildStyleUI(){
       b.onclick=()=>{ S.style=s.id; window.__open.add(gr); buildStyleUI(); };
       grid.appendChild(b);
     });
-    if(gi===0){
-      const h=document.createElement('div'); h.className='grouphead'; h.textContent=gr; h.style.marginTop='14px'; g.appendChild(h); g.appendChild(grid);
-    } else {
+    { /* every style group, including the first, is a collapsible drop-down */
       const det=document.createElement('details'); det.className='sgroup';
       if(hasSel||window.__open.has(gr)) det.open=true;
       det.ontoggle=()=>{ det.open? window.__open.add(gr):window.__open.delete(gr); };
@@ -1375,7 +1378,7 @@ function buildStyleUI(){
   DECOR.forEach(x=>{
     const b=document.createElement('button'); b.className='chip'+(S.decor.has(x)?' sel':'');
     b.textContent=x;
-    b.onclick=()=>{ S.decor.has(x)? S.decor.delete(x):S.decor.add(x); buildStyleUI(); };
+    b.onclick=()=>{ if(S.decor.has(x)) S.decor.delete(x); else if(S.decor.size>=MAX_DECOR){ toast('Pick up to '+MAX_DECOR+' extras per makeover.'); return; } else S.decor.add(x); buildStyleUI(); };
     d.appendChild(b);
   });
   $('#creditline').textContent = `${S.credits} credits left`;
