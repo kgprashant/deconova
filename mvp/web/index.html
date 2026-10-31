@@ -406,6 +406,21 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .aisw{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:6px;border:1px solid rgba(128,128,128,.5)}
 .aicard ul{margin:6px 0 8px;padding-left:18px;font-size:13.5px}
 .aicard .btn{margin-top:8px}
+#newObjs{position:absolute;inset:0;pointer-events:none;z-index:4}
+.nobj{position:absolute;border:2px solid var(--signal);border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.nobj span{position:absolute;left:-2px;top:100%;margin-top:3px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;line-height:1.2;padding:3px 6px;border-radius:5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}
+.nobj.rt span{left:auto;right:-2px}
+.nobj.low span{top:auto;bottom:100%;margin:0 0 3px}
+.chkrow{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14.5px;cursor:pointer}
+.chkrow input{width:19px;height:19px;accent-color:var(--signal);flex:none}
+.costline{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.costline b{white-space:nowrap}
+.costtot{border-top:1px solid rgba(128,128,128,.4);margin-top:6px;padding-top:8px;font-size:17px}
+.aicard{cursor:pointer}
+.aicard .pick{float:right;width:20px;height:20px;border-radius:50%;border:2px solid rgba(128,128,128,.6)}
+.aicard.on{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal) inset}
+.aicard.on .pick{background:var(--signal);box-shadow:0 0 0 3px var(--panel,#fff) inset}
+.aifoot{position:sticky;bottom:-22px;margin:12px -16px -22px;padding:12px 16px 18px;background:var(--panel,#fff)}
 </style>
 
 <div id="app">
@@ -512,11 +527,16 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div id="reveal">
     <img id="revBase" alt="Makeover result">
     <div id="revTop"><img id="revTopImg" alt="Original room"></div>
-    <div id="tempveil"></div>
+    <div id="newObjs"></div><div id="tempveil"></div>
     <div id="seam"></div>
     <button id="handle" aria-label="Drag to compare" tabindex="0">↔</button>
     <span class="tag" id="tagB">BEFORE</span><span class="tag" id="tagA">AFTER</span>
     <div class="shine" id="shine"></div>
+  </div>
+  <div id="costCard" class="votebox" hidden style="margin-top:10px">
+    <div class="grouphead" style="font-size:18px">&#128176; Makeover cost</div>
+    <label class="chkrow"><input type="checkbox" id="showObjs"> <span>Show new objects</span></label>
+    <div id="costList"></div>
   </div>
   <div class="simnote" id="simnote">Simulated render — the real build sends this frame to the image model. Wall colour, light, contrast checks and the story below are live.</div>
   </div>
@@ -1160,7 +1180,7 @@ function listenTilt(){
 function onPhoto(dataUrl, baseId){
   S.baseId = baseId || ('r'+Date.now());
   shareId=null; if($('#shareOut')) $('#shareOut').innerHTML='';
-  S.original = dataUrl; S.versions=[]; S.read=null; S.story=null; S.preTags=[];
+  S.original = dataUrl; S.cost=null; S.pendingPlan=null; S.versions=[]; S.read=null; S.story=null; S.preTags=[];
   S.wall=null; S.kelvin=3200; S.ev=0; S.mask=null;
   $('#readimg').src = dataUrl;
   $$('#readwrap .brk').forEach(b=>b.remove());
@@ -1401,6 +1421,8 @@ $('#go').onclick = async ()=>{
   if(!url){ url = await simulateRender(S.original, s); S.credits--; }
   await sset('credits:'+S.user, S.credits);
   S.versions = [{id:'v1',label:s.label,url,kind:'generate'}];
+  { const pl=S.pendingPlan; S.pendingPlan=null;
+    S.cost=pl? {paint:pl.paint_cost||0, items:pl.items.map(i=>({name:i.name,cost:i.approx_cost,on:true,box:null}))} : null; }
   S.compare=[0,1]; S.wall=null; S.kelvin=3200; S.ev=0; S.mask=null; S.story=null;
   await buildMask(url);
   stopLoader();
@@ -1413,6 +1435,7 @@ $('#go').onclick = async ()=>{
   haptic(18);
   const sh=$('#shine'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
   setTimeout(()=>wipe(), 560);
+  costUI(); if(S.cost&&real) locateNew(url);
   writeStory(url,s);
 };
 
@@ -1799,24 +1822,60 @@ function aiOpen(){ $('#aiSheet').hidden=false; }
 function aiClose(){ $('#aiSheet').hidden=true; }
 $('#aiClose').onclick=aiClose;
 $('#aiSheet').addEventListener('click',e=>{ if(e.target.id==='aiSheet') aiClose(); });
+let aiSel=1;
 function aiDraw(r){
-  $('#aiBody').innerHTML=`<p class="credit">${esc(r.summary||'')} Choosing a plan sets the style and extras, then makes the room over for 1 credit.</p><div class="aicards">`+
+  $('#aiBody').innerHTML=`<p class="credit">${esc(r.summary||'')} Tap a plan to select it, then use it. It sets the style and extras and makes the room over for 1 credit.</p><div class="aicards">`+
     r.plans.map((p,i)=>{ const t=AI_TIERS[p.tier]||[p.tier,''];
-      return `<div class="aicard${p.tier==='optimized'?' rec':''}"><div class="aitier">${esc(t[0])}${p.tier==='optimized'?' &middot; recommended':''}</div>
+      return `<div class="aicard${i===aiSel?' on':''}" data-pl="${i}" role="radio" aria-checked="${i===aiSel}" tabindex="0"><span class="pick"></span><div class="aitier">${esc(t[0])}${p.tier==='optimized'?' &middot; recommended':''}</div>
       <div class="aiprice">${inr(p.total_cost)}</div><b>${esc(p.title||p.style_label)}</b> <span class="soft">&middot; ${esc(p.style_label)}</span>
       ${p.wall?`<div style="margin-top:4px"><span class="aisw" style="background:${p.wall.hex}"></span>${esc(p.wall.name||'Wall')} walls</div>`:''}
       ${p.decor.length?`<div class="chips" style="flex-wrap:wrap;margin-top:6px">${p.decor.map(d=>`<span class="chip sel" style="font-size:12px;padding:4px 9px">${esc(d)}</span>`).join('')}</div>`:''}
       <ul>${p.changes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
-      <div class="soft" style="font-size:13px">${p.items.map(it=>`${esc(it.name)} ${inr(it.approx_cost)}`).join(' &middot; ')}</div>
-      ${p.why?`<p class="credit" style="margin-top:6px">${esc(p.why)}</p>`:''}
-      <button class="btn${p.tier==='optimized'?' sig':''}" data-use="${i}">Use this plan &mdash; 1 credit</button></div>`; }).join('')+'</div>';
-  $$('#aiBody [data-use]').forEach(b=>b.onclick=()=>aiUse(aiPlans[+b.dataset.use]));
+      <div class="soft" style="font-size:13px">Paint &amp; walls ${inr(p.paint_cost)}${p.items.map(it=>` &middot; ${esc(it.name)} ${inr(it.approx_cost)}`).join('')}</div>
+      ${p.why?`<p class="credit" style="margin-top:6px">${esc(p.why)}</p>`:''}</div>`; }).join('')+
+    `</div><div class="aifoot"><button class="btn sig" id="aiUse">Use selected plan &mdash; 1 credit</button></div>`;
+  const pick=i=>{ aiSel=i; $$('#aiBody .aicard').forEach((c,k)=>{ c.classList.toggle('on',k===i); c.setAttribute('aria-checked',k===i); }); };
+  $$('#aiBody .aicard').forEach((c,i)=>{ c.onclick=()=>pick(i); c.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); pick(i); } }; });
+  $('#aiUse').onclick=()=>aiUse(aiPlans[aiSel]);
 }
 async function aiUse(p){
   if(S.credits<1){ toast('Out of credits.'); return; }
-  S.style=p.style_id; S.decor=new Set(p.decor||[]); S.aiWall=p.wall||null;
+  S.style=p.style_id; S.decor=new Set(p.decor||[]); S.pendingPlan=p;
   aiClose(); buildStyleUI();
   $('#go').click();
+}
+/* cost card: paint is a fixed base, new objects are tickable */
+function costUI(){
+  const c=S.cost, card=$('#costCard'); if(!card) return;
+  if(!c){ card.hidden=true; $('#newObjs').innerHTML=''; return; }
+  card.hidden=false;
+  const tot=c.paint+c.items.filter(i=>i.on).reduce((a,i)=>a+i.cost,0);
+  $('#costList').innerHTML=
+    `<div class="costline" style="padding:6px 0"><span>&#128274; Paint &amp; wall finish <span class="soft">(base, fixed)</span></span><b>${inr(c.paint)}</b></div>`+
+    c.items.map((it,i)=>`<label class="chkrow"><input type="checkbox" data-ci="${i}"${it.on?' checked':''}><span class="costline" style="flex:1"><span>${esc(it.name)}${it.box?'':' <span class="soft" style="font-size:12px">(not located)</span>'}</span><b>${inr(it.cost)}</b></span></label>`).join('')+
+    `<div class="costline costtot"><span>Total estimate</span><b>${inr(tot)}</b></div>`+
+    (c.locating?'<p class="credit">Finding the new objects in your photo…</p>':'');
+  $$('#costList [data-ci]').forEach(x=>x.onchange=()=>{ c.items[+x.dataset.ci].on=x.checked; costUI(); });
+  const L=$('#newObjs'); L.innerHTML='';
+  if($('#showObjs').checked){
+    c.items.forEach(it=>{ if(!it.on||!it.box) return; const [x,y,w,h]=it.box;
+      const d=document.createElement('div'); d.className='nobj'+(y+h>86?' low':'')+(x>45?' rt':''); d.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
+      d.innerHTML=`<span>${esc(it.name)} &middot; ${inr(it.cost)}</span>`; L.appendChild(d); });
+  }
+}
+$('#showObjs').onchange=costUI;
+async function locateNew(url){
+  const c=S.cost; if(!c||!sb) return;
+  c.locating=true; costUI();
+  try{
+    const img=(await thumb(url,760)).split(',')[1];
+    const d=await callEdge('dn-plan',{task:'locate', image:img, names:c.items.map(i=>i.name)});
+    if(S.cost===c && d&&d.ok){
+      const bx=(d.result.boxes||[]);
+      c.items.forEach((it,i)=>{ const m=bx.find(b=>String(b.name).toLowerCase()===it.name.toLowerCase())||bx[i]; it.box=(m&&m.box)||null; });
+    }
+  }catch(e){}
+  c.locating=false; if(S.cost===c) costUI();
 }
 $('#askAi').onclick=async ()=>{
   if(!sb){ toast('Ask AI needs the connected version. See the README.'); return; }
