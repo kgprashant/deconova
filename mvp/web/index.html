@@ -390,6 +390,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .hero{padding:30px 20px 24px}
 .hero .lede{font-size:16.5px;color:var(--ink-soft);margin:14px 0 24px;max-width:30ch}
 .credit{font-size:12px;color:var(--ink-soft)}
+.votebox{border:1px solid var(--line,#ddd);border-radius:14px;padding:14px;margin-bottom:6px}
 </style>
 
 <div id="app">
@@ -574,15 +575,16 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <p class="credit">Traditional Vastu guidance as suggestions only. It only proposes changes you can make by moving things.</p>
       <button class="btn ghost" id="vastuGo">Show Vastu notes</button>
       <div id="vastuOut"></div>
-
-      <div class="grouphead" style="font-size:18px">Family vote</div>
-      <p class="credit">Share a private link. Family can compare before and after, and pick a favourite. You can stop sharing at any time.</p>
-      <button class="btn ghost" id="shareGo">Share for a family vote</button>
-      <div id="shareOut"></div>
     </div>
 
     <div class="hr"></div>
-    <button class="btn" id="save">Save to cloud</button>
+    <div id="voteBox" class="votebox">
+      <div class="grouphead" style="font-size:18px">&#128106; Family vote</div>
+      <p class="credit">Share a private link. Family can compare before and after, and pick a favourite. You can stop sharing at any time.</p>
+      <button class="btn" id="shareGo">Share for a family vote</button>
+      <div id="shareOut"></div>
+    </div>
+    <button class="btn" id="save" style="margin-top:10px">Save to cloud</button>
     <button class="btn ghost" id="restyle" style="margin-top:10px">Try another style on this photo</button>
   </div>
   </div>
