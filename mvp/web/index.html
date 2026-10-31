@@ -400,7 +400,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .askai:active{transform:scale(.97)}
 #aiSheet{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
 #aiSheet[hidden]{display:none}
-#aiSheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(720px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px}
+#aiSheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(720px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 70px}
 .aihead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .aicards{display:grid;gap:12px;margin-top:10px}
 .aicard{border:1px solid rgba(128,128,128,.35);border-radius:14px;padding:12px}
@@ -424,23 +424,15 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .aicard .pick{float:right;width:20px;height:20px;border-radius:50%;border:2px solid rgba(128,128,128,.6)}
 .aicard.on{border-color:var(--signal);box-shadow:0 0 0 2px var(--signal) inset}
 .aicard.on .pick{background:var(--signal);box-shadow:0 0 0 3px var(--panel,#fff) inset}
-.aifoot{position:sticky;bottom:-22px;margin:12px -16px -22px;padding:12px 16px 18px;background:var(--panel,#fff)}
+.aifoot{position:sticky;bottom:-70px;margin:12px -16px -70px;padding:12px 16px 70px;background:var(--panel,#fff)}
 #buySheet{position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
 #buySheet[hidden]{display:none}
-#buySheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px}
+#buySheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(560px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 70px}
 .buyrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(128,128,128,.25)}
 .buyrow a{white-space:nowrap;text-decoration:underline;text-underline-offset:3px}
-#iosHint{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:80;background:#1d1c1a;color:#f2eee7;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.35;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+#iosHint{position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:80;background:#1d1c1a;color:#f2eee7;border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.35;box-shadow:0 8px 28px rgba(0,0,0,.5)}
 #iosHint[hidden]{display:none}
 #iosHint button{float:right;margin-left:10px;background:none;border:0;color:inherit;font-size:20px;line-height:1}
-#nlBadge{position:fixed;z-index:70;left:0;top:0;display:flex;align-items:center;gap:8px;height:38px;min-width:38px;padding:0 9px;border-radius:19px;
-  background:rgba(18,17,16,.82);color:#f2eee7;border:1px solid rgba(255,255,255,.22);box-shadow:0 4px 14px rgba(0,0,0,.45);
-  font-size:12.5px;white-space:nowrap;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
-#nlBadge:active{cursor:grabbing}
-#nlBadge svg{width:20px;height:20px;flex:none}
-#nlBadge .nltxt{display:none}
-#nlBadge.open .nltxt{display:inline}
-#nlBadge .nltxt a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
 
 <div id="app">
@@ -733,7 +725,6 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <div class="toast" id="toast"></div>
 </div>
 
-<div id="nlBadge" role="note" aria-label="Powered by Netlify. Drag to move."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l10 10-10 10L2 12z" fill="none" stroke="#32e6e2" stroke-width="2" stroke-linejoin="round"/><path d="M12 7v10M7 12h10" stroke="#32e6e2" stroke-width="2" stroke-linecap="round"/></svg><span class="nltxt">Powered by <b><a href="https://www.netlify.com" target="_blank" rel="noopener noreferrer">Netlify</a></b></span></div>
 <div id="iosHint" hidden><button type="button" id="iosHintX" aria-label="Close">&times;</button>Install DecoNova on your iPhone: tap <b>Share</b> <span aria-hidden="true">&#11014;&#65039;</span> then <b>Add to Home Screen</b>.</div>
 <div id="aiSheet" hidden><div class="aibox" role="dialog" aria-label="Ask AI">
   <div class="aihead"><b style="font-size:18px">&#10024; Ask AI</b><button class="back" type="button" id="aiClose">Close</button></div>
@@ -2415,34 +2406,6 @@ $('#clearHistory').onclick = async ()=>{
   window.__mem=[]; window.__memp=[]; S.versions=[]; S.original=null;
   toast('Everything deleted.'); drawGallery(); show('gallery');
 };
-/* Netlify's free-plan badge is injected over the page and covers buttons. Replace it with a small draggable icon that still credits Netlify. */
-(function netlifyBadge(){
-  const el=$('#nlBadge'); if(!el) return;
-  const KEY='dn:nlpos'; let pos=null, moved=false, sx=0, sy=0, ox=0, oy=0, drag=false, timer=0;
-  const W=()=>innerWidth, H=()=>innerHeight;
-  const clampPos=(x,y)=>({x:Math.max(4,Math.min(W()-el.offsetWidth-4,x)), y:Math.max(4,Math.min(H()-el.offsetHeight-4,y))});
-  const place=(x,y)=>{ pos=clampPos(x,y); el.style.transform=`translate(${pos.x}px,${pos.y}px)`; };
-  try{ const q=JSON.parse(localStorage.getItem(KEY)||'null'); if(q&&typeof q.fx==='number') pos={x:q.fx*W(),y:q.fy*H()}; }catch(e){}
-  const home=()=>place(W()-el.offsetWidth-12, H()-el.offsetHeight-92);
-  if(pos) place(pos.x,pos.y); else home();
-  const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify({fx:pos.x/W(),fy:pos.y/H()})); }catch(e){} };
-  el.addEventListener('pointerdown',e=>{ drag=true; moved=false; sx=e.clientX; sy=e.clientY; ox=pos.x; oy=pos.y; el.setPointerCapture(e.pointerId); });
-  el.addEventListener('pointermove',e=>{ if(!drag) return; const dx=e.clientX-sx, dy=e.clientY-sy; if(Math.abs(dx)+Math.abs(dy)>5) moved=true; if(moved){ place(ox+dx,oy+dy); e.preventDefault(); } });
-  const end=()=>{ if(!drag) return; drag=false; if(moved){ save(); } else { el.classList.toggle('open'); place(pos.x,pos.y); clearTimeout(timer); if(el.classList.contains('open')) timer=setTimeout(()=>{ el.classList.remove('open'); place(pos.x,pos.y); },4500); } };
-  el.addEventListener('pointerup',end); el.addEventListener('pointercancel',()=>{ drag=false; });
-  el.querySelector('a').addEventListener('pointerdown',e=>e.stopPropagation());
-  addEventListener('resize',()=>place(pos.x,pos.y));
-  /* find and hide the injected badge (any element outside our app whose text is "Powered by Netlify") */
-  const hide=()=>{
-    const roots=[document.body,...document.documentElement.children];
-    document.querySelectorAll('body > *').forEach(n=>{
-      if(n===el||n.id==='iosHint'||n.tagName==='SCRIPT'||n.tagName==='STYLE'||n.tagName==='LINK') return;
-      const t=(n.shadowRoot?n.shadowRoot.textContent:n.textContent)||'';
-      if(/Powered by\s*Netlify/i.test(t)&&t.length<200&&!n.querySelector('.screen')&&n.id!=='nlBadge'){ n.style.setProperty('display','none','important'); }
-    });
-  };
-  hide(); new MutationObserver(hide).observe(document.body,{childList:true});
-})();
 (function iosInstallHint(){
   try{
     const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
