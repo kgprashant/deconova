@@ -37,7 +37,7 @@ After editing `scripts/extra_styles.json`, run `python3 -I scripts/build_styles.
 | Supabase free plan, Netlify or Cloudflare free hosting | ₹0 |
 | Claude Haiku text and vision (room read, story, budget, Vastu) | About ₹1 to ₹2 per call (Anthropic API, prepaid) |
 | Image renders | About ₹3 to ₹4 each at the draft-tier price (US$0.0336 per 1K image, 13 Oct 2026), plus a small input charge |
-| Hard ceiling | `MAX_TOTAL_RENDERS=300`, so roughly ₹900 to ₹1,200 at most. After that the app shows the simulated preview |
+| Hard ceiling | `MAX_TOTAL_RENDERS=200`, so roughly ₹600 to ₹900 at most. After that the app shows the simulated preview |
 
 Check the live price before the demo. Free-tier Gemini requests may be used by Google to improve its products, so use sample rooms, not private photos, until you move to a paid key.
 
