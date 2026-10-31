@@ -615,6 +615,13 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div class="pad">
     <div id="svStory"></div>
     <div class="hr"></div>
+    <div class="votebox">
+      <div class="grouphead" style="font-size:18px">&#128106; Family vote</div>
+      <p class="credit">Share a private link with family and see which makeover they pick. Come back any time to check the votes.</p>
+      <button class="btn" id="svShareGo">Start a family vote</button>
+      <div id="svVoteOut"></div>
+    </div>
+    <div style="height:10px"></div>
     <a class="btn ghost" id="svDownload" download="deconova.jpg">Download the makeover</a>
     <div style="height:10px"></div>
     <button class="btn ghost" id="svDelete">Delete this makeover</button>
@@ -1709,24 +1716,26 @@ $('#vastuGo').onclick=async ()=>{
   }catch(e){ $('#vastuOut').innerHTML=''; toast('Could not reach the server.'); }
 };
 let shareId=null, shareArm=0;
-async function showVotes(){
-  const {data}=await sb.rpc('dn_get_share',{p_id:shareId});
-  if(!data){ $('#shareOut').innerHTML='<p class="soft">This share has ended.</p>'; shareId=null; return; }
+/* renders votes for share `id` into element `out`; onGone() runs when the share ended or was stopped */
+async function showVotesIn(out,id,onGone){
+  const {data}=await sb.rpc('dn_get_share',{p_id:id});
+  if(!data){ out.innerHTML='<p class="soft">This share has ended.</p>'; if(onGone) onGone(); return; }
   const tally=data.tally||{}, names=(data.concepts||[]).map(c=>c.label);
   const total=Object.values(tally).reduce((a,b)=>a+b,0);
-  const link=new URL('share.html?id='+shareId, location.href).href;
-  $('#shareOut').innerHTML=`<p class="credit" style="word-break:break-all">${esc(link)}</p>
-    <div class="chips" style="margin:8px 0"><button class="chip" id="shCopy">Copy link</button><button class="chip" id="shRefresh">Refresh votes</button><button class="chip" id="shStop">Stop sharing</button></div>
+  const link=new URL('share.html?id='+id, location.href).href;
+  out.innerHTML=`<p class="credit" style="word-break:break-all">${esc(link)}</p>
+    <div class="chips" style="margin:8px 0"><button class="chip" data-a="copy">Copy link</button><button class="chip" data-a="refresh">Refresh votes</button><button class="chip" data-a="stop">Stop sharing</button></div>
     ${names.slice(1).map((n,i)=>`<div class="vrowline"><span>${esc(n)}</span><b>${tally[i+1]||0} vote${(tally[i+1]||0)===1?'':'s'}</b></div>`).join('')}
     <p class="credit">${total} vote${total===1?'':'s'} so far. The link works for 30 days.</p>`;
-  $('#shCopy').onclick=()=>{ if(navigator.share){ navigator.share({title:'Which room do you like?',url:link}).catch(()=>{}); } else { navigator.clipboard?.writeText(link); toast('Link copied'); } };
-  $('#shRefresh').onclick=showVotes;
-  $('#shStop').onclick=async ()=>{
-    const b=$('#shStop');
-    if(Date.now()-shareArm>4000){ shareArm=Date.now(); b.textContent='Tap again to stop sharing'; return; }
-    await sb.from('dn_shares').delete().eq('id',shareId); shareId=null; $('#shareOut').innerHTML=''; toast('Sharing stopped. The link no longer works.');
+  out.querySelector('[data-a=copy]').onclick=()=>{ if(navigator.share){ navigator.share({title:'Which room do you like?',url:link}).catch(()=>{}); } else { navigator.clipboard?.writeText(link); toast('Link copied'); } };
+  out.querySelector('[data-a=refresh]').onclick=()=>showVotesIn(out,id,onGone);
+  out.querySelector('[data-a=stop]').onclick=async ()=>{
+    const bt=out.querySelector('[data-a=stop]');
+    if(Date.now()-shareArm>4000){ shareArm=Date.now(); bt.textContent='Tap again to stop sharing'; return; }
+    await sb.from('dn_shares').delete().eq('id',id); out.innerHTML=''; if(onGone) onGone(); toast('Sharing stopped. The link no longer works.');
   };
 }
+async function showVotes(){ return showVotesIn($('#shareOut'),shareId,()=>{ shareId=null; }); }
 $('#shareGo').onclick=async ()=>{
   if(!sb){ toast('Sharing needs the connected version. See the README.'); return; }
   if(shareId){ showVotes(); return; }
@@ -1740,6 +1749,29 @@ $('#shareGo').onclick=async ()=>{
     shareId=data.id; await showVotes(); toast('Link ready. Photos in it are only visible to people with the link.');
   }catch(e){ toast('Could not create the link. Try again.'); }
 };
+/* family vote for a saved (cloud) room: start it later, or check results any time */
+async function svVoteInit(){
+  const out=$('#svVoteOut'), go=$('#svShareGo'); if(!out||!go) return;
+  out.innerHTML=''; const rec=svCur;
+  const persist=async ()=>{ const ok=await sset('room:'+rec.id, rec); if(!ok) window.__mem=(window.__mem||[]).map(x=>x.id===rec.id?rec:x); };
+  const gone=async ()=>{ delete rec.shareId; await persist(); go.style.display=''; go.textContent='Start a family vote'; };
+  if(!sb){ go.style.display='none'; out.innerHTML='<p class="soft">Voting needs the connected version.</p>'; return; }
+  if(rec.shareId){ go.style.display='none'; showVotesIn(out,rec.shareId,gone); }
+  else { go.style.display=''; go.textContent='Start a family vote'; }
+  go.onclick=async ()=>{
+    try{
+      go.disabled=true;
+      const vars=(rec.variants&&rec.variants.length)?rec.variants:[{style:rec.style,after:rec.after}];
+      const concepts=[{label:'Original',img:await thumb(rec.before,760)}];
+      for(const v of vars) concepts.push({label:v.style, img:await thumb(v.after,760)});
+      const {data,error}=await sb.from('dn_shares').insert({title:(rec.style||'Room')+' makeover', concepts}).select('id').single();
+      if(error||!data) throw error||new Error('x');
+      rec.shareId=data.id; await persist(); go.style.display='none';
+      await showVotesIn(out,rec.shareId,gone); toast('Link ready. Photos in it are only visible to people with the link.');
+    }catch(e){ toast('Could not create the link. Try again.'); }
+    finally{ go.disabled=false; }
+  };
+}
 
 /* --- tabs --- */
 $$('.tabs button').forEach(b=>b.onclick=()=>{
@@ -1953,6 +1985,7 @@ $('#save').onclick = async ()=>{
     rec={id, before:await thumb(S.original,760), room:(S.read&&S.read.room_type)||'room', variants:[]};
   }
   rec.variants.push(v);
+  if(shareId&&!rec.shareId) rec.shareId=shareId;
   Object.assign(rec,{style:v.style,pack:v.pack,after:v.after,versions:v.versions,at:v.at,wall:v.wall,kelvin:v.kelvin,ev:v.ev,accent:v.accent,story:v.story,
     tags:[...new Set(rec.variants.flatMap(x=>x.tags||[]))]});
   const ok=await sset(key, rec);
@@ -2051,6 +2084,7 @@ function openSaved(r, vi){
     $$('#svVars [data-vi]').forEach(b=>b.onclick=()=>openSaved(svCur, +b.dataset.vi));
     const nb=$('#svNew'); if(nb) nb.onclick=()=>onPhoto(svCur.before, svCur.id); }
   renderStoryInto($('#svStory'), r.story);
+  svVoteInit();
   svSet(50); show('saved');
   const sh=$('#svShine'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
   setTimeout(()=>svWipe(), 520);
