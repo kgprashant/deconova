@@ -406,7 +406,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .aisw{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:6px;border:1px solid rgba(128,128,128,.5)}
 .aicard ul{margin:6px 0 8px;padding-left:18px;font-size:13.5px}
 .aicard .btn{margin-top:8px}
-#newObjs{position:absolute;inset:0;pointer-events:none;z-index:4}
+#newObjs,.objlayer{position:absolute;inset:0;pointer-events:none;z-index:4}
 .nobj{position:absolute;border:2px solid var(--signal);border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
 .nobj span{position:absolute;left:-2px;top:100%;margin-top:3px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;line-height:1.2;padding:3px 6px;border-radius:5px;white-space:nowrap;max-width:60vw;overflow:hidden;text-overflow:ellipsis}
 .nobj.rt span{left:auto;right:-2px}
@@ -646,6 +646,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   </div>
   <div id="svReveal">
     <img id="svBase" alt="Makeover">
+    <div id="svObjs" class="objlayer"></div>
     <div id="svTop"><img id="svTopImg" alt="The original room"></div>
     <div id="svSeam"></div>
     <button id="svHandle" aria-label="Drag to compare" tabindex="0">&#8596;</button>
@@ -655,6 +656,12 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div class="viewonly">Drag to compare. Saved rooms are kept exactly as they were made.</div>
   <div class="pad">
     <div id="svStory"></div>
+    <div id="svCost" class="votebox" hidden>
+      <div class="grouphead" style="font-size:18px">&#128176; Makeover cost</div>
+      <label class="chkrow"><input type="checkbox" id="svShowObjs"> <span>Show new objects</span></label>
+      <div id="svCostList"></div>
+      <button class="btn sig" id="svBuyBtn" type="button" style="margin-top:10px">&#128722; Buy these items</button>
+    </div>
     <div class="hr"></div>
     <div class="votebox">
       <div class="grouphead" style="font-size:18px">&#128106; Family vote</div>
@@ -662,6 +669,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <button class="btn" id="svShareGo">Start a family vote</button>
       <div id="svVoteOut"></div>
     </div>
+    <div style="height:10px"></div>
+    <button class="btn" id="svEdit" type="button">Open with all tools &mdash; walls, light, edit, budget, Vastu</button>
     <div style="height:10px"></div>
     <a class="btn ghost" id="svDownload" download="deconova.jpg">Download the makeover</a>
     <div style="height:10px"></div>
@@ -1862,27 +1871,36 @@ async function aiUse(p){
   $('#go').click();
 }
 /* cost card: paint is a fixed base, new objects are tickable */
-function costUI(){
-  const c=S.cost, card=$('#costCard'); if(!card) return;
-  if(!c){ card.hidden=true; $('#newObjs').innerHTML=''; return; }
+function costRender(c,ids,onChange){
+  const card=$(ids.card); if(!card) return;
+  const layer=$(ids.layer);
+  if(!c){ card.hidden=true; layer.innerHTML=''; return; }
   card.hidden=false;
   const tot=c.paint+c.items.filter(i=>i.on).reduce((a,i)=>a+i.cost,0);
-  $('#costList').innerHTML=
+  $(ids.list).innerHTML=
     `<div class="costline" style="padding:6px 0"><span>&#128274; Paint &amp; wall finish <span class="soft">(base, fixed)</span></span><b>${inr(c.paint)}</b></div>`+
     c.items.map((it,i)=>`<label class="chkrow"><input type="checkbox" data-ci="${i}"${it.on?' checked':''}><span class="costline" style="flex:1"><span>${esc(it.name)}</span><b>${inr(it.cost)}</b></span></label>`).join('')+
     `<div class="costline costtot"><span>Total estimate</span><b>${inr(tot)}</b></div>`+
     (c.locating?'<p class="credit">Checking which items appear in your photo…</p>':'')+
     ((c.omitted&&c.omitted.length)?`<p class="credit">Left out of the cost because the render did not show ${c.omitted.length===1?'it':'them'}: ${esc(c.omitted.join(', '))}.</p>`:'')+
     (c.verified?'<p class="credit">Every item listed here is visible in the image.</p>':'');
-  $$('#costList [data-ci]').forEach(x=>x.onchange=()=>{ c.items[+x.dataset.ci].on=x.checked; costUI(); });
-  const L=$('#newObjs'); L.innerHTML='';
-  if($('#showObjs').checked){
+  $$(ids.list+' [data-ci]').forEach(x=>x.onchange=()=>{ c.items[+x.dataset.ci].on=x.checked; costRender(c,ids,onChange); if(onChange) onChange(); });
+  layer.innerHTML='';
+  if($(ids.show).checked){
     c.items.forEach(it=>{ if(!it.on||!it.box) return; const [x,y,w,h]=it.box;
       const d=document.createElement('div'); d.className='nobj'+(y+h>86?' low':'')+(x>45?' rt':''); d.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
-      d.innerHTML=`<span>${esc(it.name)} &middot; ${inr(it.cost)}</span>`; L.appendChild(d); });
+      d.innerHTML=`<span>${esc(it.name)} &middot; ${inr(it.cost)}</span>`; layer.appendChild(d); });
   }
 }
+const RES_COST={card:'#costCard',list:'#costList',show:'#showObjs',layer:'#newObjs'};
+const SV_COST={card:'#svCost',list:'#svCostList',show:'#svShowObjs',layer:'#svObjs'};
+function costUI(){ costRender(S.cost,RES_COST); }
 $('#showObjs').onchange=costUI;
+let svCostSaveT=0;
+function svCostUI(c){
+  costRender(c,SV_COST,()=>{ clearTimeout(svCostSaveT); svCostSaveT=setTimeout(async ()=>{ const ok=await sset('room:'+svCur.id, svCur); if(!ok) window.__mem=(window.__mem||[]).map(x=>x.id===svCur.id?svCur:x); },600); });
+}
+$('#svShowObjs').onchange=()=>svCostUI(svCur&&svVar().cost);
 async function locateNew(url){
   const c=S.cost; if(!c||!sb) return;
   c.locating=true; costUI();
@@ -1924,10 +1942,13 @@ function buyUrl(store,name,app){
   }
   return 'https://www.google.com/search?tbm=shop&q='+q+'+buy+online+India';
 }
-function buyItems(){ return S.cost? S.cost.items.filter(i=>i.on).map(i=>i.name) : []; }
+let buyCtx=()=>S.cost;
+function buyItems(){ const c=buyCtx(); return c? c.items.filter(i=>i.on).map(i=>i.name) : []; }
 $('#buyClose').onclick=()=>{ $('#buySheet').hidden=true; };
 $('#buySheet').addEventListener('click',e=>{ if(e.target.id==='buySheet') e.target.hidden=true; });
-$('#buyBtn').onclick=()=>{
+$('#buyBtn').onclick=()=>{ buyCtx=()=>S.cost; buyOpen(); };
+$('#svBuyBtn').onclick=()=>{ const v=svVar(); buyCtx=()=>v.cost; buyOpen(); };
+function buyOpen(){
   const names=buyItems(); if(!names.length){ toast('Tick at least one item to buy.'); return; }
   $('#buyBody').innerHTML=`<p class="credit">${names.length} item${names.length===1?'':'s'} selected: ${esc(names.join(', '))}. Where do you want to see them?</p>
     <div class="chips" style="gap:10px;margin-top:8px;flex-wrap:wrap"><button class="btn sig" id="buyAmz" style="flex:1">Amazon</button><button class="btn" id="buyGoog" style="flex:1">Google Shopping</button></div>
@@ -1935,7 +1956,7 @@ $('#buyBtn').onclick=()=>{
   $('#buySheet').hidden=false;
   $('#buyAmz').onclick=()=>buyGo('amazon');
   $('#buyGoog').onclick=()=>buyGo('google');
-};
+}
 function buyGo(store){
   const names=buyItems(); let blocked=false;
   const appMode=IS_MOBILE&&store==='amazon';
@@ -1950,7 +1971,7 @@ function buyGo(store){
   $('#buyBody').innerHTML=`<p class="credit">${appMode?`Opened ${esc(names[0])} in the Amazon app. Tap the others to open them one by one.`:(blocked?'Your browser blocked some tabs. Tap each item below to open it.':`Opened ${names.length} tab${names.length===1?'':'s'} on ${label}. Tap an item below to open it again.`)}</p>`+
     names.map((n,i)=>`<div class="buyrow"><span>${esc(n)}</span><a href="${buyUrl(store,n,appMode)}" target="_blank" rel="noopener noreferrer">Open on ${label}</a></div>`).join('')+
     `<div class="chips" style="margin-top:12px"><button class="chip" id="buyBack">Choose another store</button></div>`;
-  $('#buyBack').onclick=()=>$('#buyBtn').onclick();
+  $('#buyBack').onclick=buyOpen;
 }
 
 /* --- tabs --- */
@@ -2154,7 +2175,9 @@ $('#save').onclick = async ()=>{
     after:await thumb(currentUrl(),760), versions:S.versions.length, at:new Date().toISOString(),
     wall:S.wall? S.wall[0]:null, kelvin:S.kelvin, ev:S.ev,
     accent:(s.palette.map(p=>p[1]).sort((a,b)=>satOf(b)-satOf(a))[0]),
-    story:S.story, tags:buildTags()};
+    story:S.story, tags:buildTags(),
+    styleId:S.style, packId:S.pack, decor:[...S.decor], read:S.read||null,
+    cost:S.cost? JSON.parse(JSON.stringify(Object.assign({},S.cost,{locating:false}))) : null};
   let rec=null; const key='room:'+id;
   try{ const r=await store.get(K(key)); if(r) rec=JSON.parse(r.value); }catch(e){}
   if(!rec) rec=(window.__mem||[]).find(x=>x.id===id)||null;
@@ -2239,6 +2262,8 @@ $('#newFromGallery').onclick=()=>$('#upl').click();
 
 /* ---------------------- saved room, read only ---------------------- */
 let svCur=null, svVi=0;
+function svVars(){ const r=svCur; return (r.variants&&r.variants.length)?r.variants:[r]; }
+function svVar(){ const v=svVars(); return v[Math.min(svVi,v.length-1)]; }
 function openSaved(r, vi){
   svCur=r;
   const vars=r.variants&&r.variants.length? r.variants : [{vid:'m0',style:r.style,pack:r.pack,after:r.after,at:r.at,wall:r.wall,kelvin:r.kelvin,ev:r.ev,accent:r.accent,story:r.story,tags:r.tags||[]}];
@@ -2264,11 +2289,32 @@ function openSaved(r, vi){
     $$('#svVars [data-vi]').forEach(b=>b.onclick=()=>openSaved(svCur, +b.dataset.vi));
     const nb=$('#svNew'); if(nb) nb.onclick=()=>onPhoto(svCur.before, svCur.id); }
   renderStoryInto($('#svStory'), r.story);
+  $('#svShowObjs').checked=false; svCostUI(V.cost||null);
   svVoteInit();
   svSet(50); show('saved');
   const sh=$('#svShine'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
   setTimeout(()=>svWipe(), 520);
 }
+$('#svEdit').onclick=async ()=>{
+  const r=svCur, V=svVar();
+  const st=STYLES.find(x=>x.id===V.styleId)||STYLES.find(x=>x.label===V.style)||STYLES[0];
+  S.original=r.before; S.baseId=r.id; S.style=st.id;
+  S.pack=V.packId||(PACKS.find(p=>p.label===V.pack)||PACKS[0]).id;
+  S.decor=new Set(V.decor||[]); S.read=V.read||r.read||null; S.story=V.story||null;
+  S.versions=[{id:'v1',label:st.label,url:V.after,kind:'generate'}]; S.compare=[0,1];
+  S.wall=null; S.kelvin=V.kelvin||3200; S.ev=V.ev||0; S.mask=null; S.selObj=null; S.dest=null; S.pendingPlan=null;
+  S.cost=V.cost? JSON.parse(JSON.stringify(V.cost)) : null;
+  shareId=r.shareId||null; $('#shareOut').innerHTML='';
+  runLoader(['Opening your makeover','Loading the editing tools']);
+  try{
+    if(!S.read && sb){ try{ const d=await callEdge('ai',{task:'room_read', image:r.before.split(',')[1]}); if(d&&d.ok) S.read=d.result; }catch(e){} }
+    if(!S.read) S.read={room_type:r.room||'room', detected:[], objects:[], light:{sources:2,direction:'side',quality:'soft'}, estimated_ceiling_m:2.7};
+    await buildMask(V.after);
+  }finally{ stopLoader(); }
+  openResult();
+  $('#showObjs').checked=false; costUI();
+  if(S.story) renderStory(); else writeStory(V.after, st);
+};
 let svPos=50, svTick=0;
 function svSet(p){
   svPos=clamp(p,0,100);
