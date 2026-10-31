@@ -180,6 +180,7 @@ input[type=email],input[type=text],input[type=password]{width:100%;padding:14px;
 .obox span{position:absolute;top:-1px;left:-1px;background:#fff;color:#16171A;font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px 0 3px 0;white-space:nowrap}
 .obox.sel{border-color:var(--brass);background:rgba(200,169,106,.22);border-width:2px}
 .obox.sel span{background:var(--brass)}
+.brk.swp{outline:2px dashed #C8A96A;outline-offset:2px}.obox.swp{outline:2px dashed #C8A96A;outline-offset:2px}
 .destdot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;border:2px solid #fff;background:var(--brass);box-shadow:0 0 0 3px rgba(0,0,0,.4);pointer-events:none}
 .seg{display:flex;gap:8px;margin:10px 0}
 .seg .chip{flex:1;text-align:center}
@@ -506,7 +507,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
     <div class="selbar" id="selbar" hidden>
       <div id="selGrip" title="Drag to move" aria-label="Drag to move this panel"><i></i></div>
       <div class="selhead"><b id="selTitle"></b><button class="back" id="selClear" type="button">Change object</button></div>
-      <div class="seg" id="selMode"><button type="button" class="chip sel" data-m="remove">Remove</button><button type="button" class="chip" data-m="replace">Replace</button><button type="button" class="chip" data-m="move">Move</button></div>
+      <div class="seg" id="selMode"><button type="button" class="chip sel" data-m="remove">Remove</button><button type="button" class="chip" data-m="replace">Replace</button><button type="button" class="chip" data-m="move">Rearrange</button></div>
+      <div class="seg" id="selWay" hidden><button type="button" class="chip sel" data-w="spot">Move to a spot</button><button type="button" class="chip" data-w="swap">Swap places with…</button></div>
       <input type="text" id="selRep" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
       <p class="credit" id="selHint"></p>
       <button class="btn" id="selGo" type="button">Remove it — 1 credit</button>
@@ -606,7 +608,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       <p class="credit" id="opHint" hidden></p>
       <div class="chips objs" id="objChips"></div>
       <input type="text" id="rmText" placeholder="Or type the object, e.g. the ceiling fan" aria-label="Object to change" maxlength="80" style="margin-top:10px">
-      <div class="seg" id="objMode"><button class="chip sel" data-m="remove">Remove it</button><button class="chip" data-m="replace">Replace it</button><button class="chip" data-m="move">Move it</button></div>
+      <div class="seg" id="objMode"><button class="chip sel" data-m="remove">Remove it</button><button class="chip" data-m="replace">Replace it</button><button class="chip" data-m="move">Rearrange it</button></div>
+      <div class="seg" id="objWay" hidden><button type="button" class="chip sel" data-w="spot">Move to a spot</button><button type="button" class="chip" data-w="swap">Swap places with…</button></div>
       <input type="text" id="repText" placeholder="Replace with, e.g. a green velvet armchair" aria-label="Replace with" maxlength="80" hidden>
       <button class="btn" id="rmGo" style="margin-top:10px">Remove it — 1 credit</button>
       <div class="credit" style="margin:20px 0 8px">Empty room</div>
@@ -760,7 +763,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
 
 const S = {
-  user:null, screen:'auth', credits:10,
+  user:null, screen:'auth', credits:100,
   original:null,          // dataURL of the uploaded photo
   read:null,              // room read JSON
   style:null, pack:null, decor:new Set(),
@@ -1006,7 +1009,7 @@ async function enter(email){
     S.credits = data? data.credits : (CFG.START_CREDITS||5);
   } else {
     const saved = await loadNum('credits:'+S.user);
-    S.credits = saved===null? 10 : saved;
+    S.credits = saved===null? 100 : saved;
   }
   show('gallery'); drawGallery();
 }
@@ -1274,7 +1277,9 @@ async function roomRead(dataUrl){
   $('#identify').hidden=true;
   paintBrackets();
 }
-let selMode='remove';
+let selMode='remove', way='spot';
+function setWay(w){ way=w; S.dest=null; S.swap=null; $$('#selWay .chip,#objWay .chip').forEach(x=>x.classList.toggle('sel',x.dataset.w===w)); selUI(); if(typeof paintPick==='function'){ try{paintPick(); syncObjMode();}catch(e){} } }
+$$('#selWay .chip,#objWay .chip').forEach(b=>b.onclick=()=>setWay(b.dataset.w));
 function setDest2(ev){
   const r=$('#readimg').getBoundingClientRect();
   S.dest={x:Math.max(2,Math.min(98,Math.round((ev.clientX-r.left)/r.width*100))), y:Math.max(2,Math.min(98,Math.round((ev.clientY-r.top)/r.height*100)))};
@@ -1284,18 +1289,20 @@ function selUI(){
   const w=$('#readwrap'); if(!w) return;
   $$('#readwrap .brk').forEach(b=>b.classList.toggle('sel', !!S.selObj && (S.read&&S.read.objects||[])[b.dataset.i]===S.selObj));
   $$('#readwrap .destdot2').forEach(x=>x.remove());
-  if(S.dest && S.selObj && selMode==='move'){
+  $$('#readwrap .brk').forEach(b=>b.classList.toggle('swp', !!S.swap && (S.read&&S.read.objects||[])[b.dataset.i]===S.swap));
+  if(S.dest && S.selObj && selMode==='move' && way==='spot'){
     const im=$('#readimg'), wr=w.getBoundingClientRect(), r=im.getBoundingClientRect();
     const d=document.createElement('i'); d.className='destdot2';
     d.style.left=(r.left-wr.left+r.width*S.dest.x/100)+'px'; d.style.top=(r.top-wr.top+r.height*S.dest.y/100)+'px'; w.appendChild(d);
   }
-  const bar=$('#selbar'); bar.hidden=!S.selObj; document.body.classList.toggle('selopen',!!S.selObj&&S.screen==='style'); if(!S.selObj) return;
+  const bar=$('#selbar'); bar.hidden=!S.selObj; document.body.classList.toggle('selopen',!!S.selObj&&S.screen==='style'); if(!S.selObj){ S.swap=null; return; }
+  $('#selWay').hidden=selMode!=='move';
   if(window.applySelPos) applySelPos();
   $('#selTitle').textContent='Selected: '+S.selObj.name;
   $$('#selMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===selMode));
   $('#selRep').hidden=selMode!=='replace';
-  $('#selGo').textContent=({remove:'Remove it — 1 credit',replace:'Replace it — 1 credit',move:'Move it — 1 credit'})[selMode];
-  $('#selHint').textContent = selMode==='move' ? (S.dest?'Destination marked. Tap the photo again to change it.':'Tap the photo where it should go.')
+  $('#selGo').textContent=({remove:'Remove it — 1 credit',replace:'Replace it — 1 credit',move:'Rearrange it — 1 credit'})[selMode];
+  $('#selHint').textContent = selMode==='move' ? (way==='swap' ? (S.swap?`Swapping with ${S.swap.name}. Tap another object to change it.`:'Tap the object it should swap places with.') : (S.dest?'Destination marked. Tap the photo again to change it.':'Tap the photo where it should go.'))
     : selMode==='replace' ? 'Type what should take its place.' : 'It will be erased and the wall or floor filled in.';
 }
 (function(){
@@ -1310,7 +1317,7 @@ function selUI(){
 })();
 $$('#selMode .chip').forEach(b=>b.onclick=()=>{ selMode=b.dataset.m; S.dest=null; selUI(); });
 $('#selClear').onclick=()=>{ S.selObj=null; S.dest=null; selUI(); };
-$('#readwrap').addEventListener('click',ev=>{ if(selMode==='move' && S.selObj && !ev.target.closest('.brk')) setDest2(ev); });
+$('#readwrap').addEventListener('click',ev=>{ if(selMode==='move' && way==='spot' && S.selObj && !ev.target.closest('.brk')) setDest2(ev); });
 async function preEdit(mode, extra, label){
   if(S.credits<1){ toast('Out of credits.'); return; }
   if(!REAL){ toast('Edits need the image model. Connect it first — see the README.'); return; }
@@ -1320,7 +1327,7 @@ async function preEdit(mode, extra, label){
     if(typeof (d&&d.credits_left)==='number'){ S.credits=d.credits_left; await sset('credits:'+S.user,S.credits); }
     if(!d || !d.ok){ toast((d&&d.message)||'The render did not finish.'); return; }
     const url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original);
-    S.original=url; S.versions=[]; S.selObj=null; S.dest=null; (S.preTags=S.preTags||[]).push((({remove:'Removed',replace:'Replaced',move:'Moved'})[mode]||'Edited')+': '+String(extra.target||'').replace(/^the /,''));
+    S.original=url; S.versions=[]; S.selObj=null; S.dest=null; S.swap=null; (S.preTags=S.preTags||[]).push((({remove:'Removed',replace:'Replaced',move:'Rearranged'})[mode]||'Edited')+': '+String(extra.target||'').replace(/^the /,''));
     $('#readimg').src=url; sampleRegions(url);
     $$('#readwrap .brk').forEach(b=>b.remove()); selUI(); buildStyleUI();
     toast(label+' done. Pick a style to continue.');
@@ -1332,8 +1339,11 @@ $('#selGo').onclick=()=>{
   const o=S.selObj; if(!o) return;
   const t='the '+o.name, loc=locText(o);
   if(selMode==='replace'){ const r=$('#selRep').value.trim(); if(!r){ toast('Say what to replace it with.'); return; } preEdit('replace',{target:t,replacement:r,loc},'Replaced '+o.name); }
-  else if(selMode==='move'){ if(!S.dest){ toast('Tap the photo where it should go.'); return; }
-    preEdit('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Moved '+o.name); }
+  else if(selMode==='move'){
+    if(way==='swap'){ if(!S.swap||S.swap===o){ toast('Tap the other object to swap with.'); return; }
+      preEdit('move',{target:t,loc,dest:swapDest(S.swap)},'Swapped '+o.name+' and '+S.swap.name); }
+    else { if(!S.dest){ toast('Tap the photo where it should go.'); return; }
+      preEdit('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Rearranged '+o.name); } }
   else preEdit('remove',{target:t,loc},'Removed '+o.name);
 };
 function paintBrackets(){
@@ -1343,7 +1353,7 @@ function paintBrackets(){
     const d=document.createElement('div'); d.className='brk';
     d.style.cssText=`left:${l}%;top:${t}%;width:${ww}%;height:${hh}%;animation-delay:${i*130}ms`;
     d.innerHTML='<span>'+o.name+'</span>'; d.dataset.i=i;
-    d.onclick=ev=>{ ev.stopPropagation(); if(S.selObj===o){ S.selObj=null; S.dest=null; selUI(); return; } if(selMode==='move' && S.selObj){ setDest2(ev); return; } S.selObj=o; S.dest=null; selUI(); };
+    d.onclick=ev=>{ ev.stopPropagation(); if(S.selObj===o){ S.selObj=null; S.dest=null; selUI(); return; } if(selMode==='move' && S.selObj){ if(way==='swap'){ S.swap=o; selUI(); return; } setDest2(ev); return; } S.selObj=o; S.dest=null; S.swap=null; selUI(); };
     w.appendChild(d);
   });
   selUI();
@@ -1714,6 +1724,7 @@ async function editRender(mode, extra, label){
 $('#floorGo').onclick=()=>floorPick&&editRender('floor',{material:floorPick},floorPick+' floor');
 let objMode='remove';
 function pct(n){ return Math.round(n); }
+function swapDest(o){ const [x,y,w,h]=o.box, n=String(o.name).slice(0,14); return `at about ${Math.round(x+w/2)} percent from the left and ${Math.round(y+h/2)} percent down, where the ${n} is, and put the ${n} where this item was`; }
 function locText(o){ const [x,y,w,h]=o.box; return `about ${pct(x+w/2)} percent from the left edge and ${pct(y+h/2)} percent from the top, spanning about ${pct(w)} percent of the width`; }
 function paintPick(){
   const layer=$('#opLayer'); if(!layer) return; layer.innerHTML='';
@@ -1722,12 +1733,13 @@ function paintPick(){
     b.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`; b.innerHTML='<span>'+o.name+'</span>';
     b.onclick=ev=>{
       if(S.selObj===o){ S.selObj=null; S.dest=null; $('#rmText').value=''; paintPick(); hintText(); return; }
-      if(objMode==='move' && S.selObj){ setDest(ev); return; }
-      S.selObj=o; S.dest=null; $('#rmText').value='the '+o.name; paintPick(); hintText();
+      if(objMode==='move' && S.selObj){ if(way==='swap'){ S.swap=o; paintPick(); hintText(); return; } setDest(ev); return; }
+      S.selObj=o; S.swap=null; S.dest=null; $('#rmText').value='the '+o.name; paintPick(); hintText();
     };
     layer.appendChild(b);
   });
-  if(S.dest){ const d=document.createElement('i'); d.className='destdot'; d.style.left=S.dest.x+'%'; d.style.top=S.dest.y+'%'; layer.appendChild(d); }
+  $$('#opLayer .obox').forEach((b,i)=>b.classList.toggle('swp', !!S.swap && (S.read&&S.read.objects||[])[i]===S.swap));
+  if(S.dest && way==='spot'){ const d=document.createElement('i'); d.className='destdot'; d.style.left=S.dest.x+'%'; d.style.top=S.dest.y+'%'; layer.appendChild(d); }
 }
 function setDest(ev){
   const r=$('#opLayer').getBoundingClientRect();
@@ -1739,7 +1751,7 @@ function hintText(){
   h.hidden=!has;
   if(!has) return;
   if(!S.selObj) h.textContent='Tap an object on the photo to select it.';
-  else if(objMode==='move') h.textContent=S.dest? 'Destination marked. Tap again to change it, then press Move.' : `Selected: ${S.selObj.name}. Now tap where it should go.`;
+  else if(objMode==='move') h.textContent= way==='swap' ? (S.swap?`Swapping with ${S.swap.name}. Press Rearrange.`:`Selected: ${S.selObj.name}. Now tap the object to swap places with.`) : (S.dest? 'Destination marked. Tap again to change it, then press Rearrange.' : `Selected: ${S.selObj.name}. Now tap where it should go.`);
   else h.textContent=`Selected: ${S.selObj.name}. Choose Remove or Replace below.`;
 }
 function buildObjChips(){
@@ -1749,7 +1761,7 @@ function buildObjChips(){
   if(objs.length){
     $('#opImg').src=currentUrl();
     S.selObj=null; S.dest=null; paintPick();
-    $('#opLayer').onclick=ev=>{ if(ev.target.id==='opLayer' && objMode==='move' && S.selObj) setDest(ev); };
+    $('#opLayer').onclick=ev=>{ if(ev.target.id==='opLayer' && objMode==='move' && way==='spot' && S.selObj) setDest(ev); };
   }
   hintText();
   const names=[...new Set([...objs.map(o=>o.name),...(S.read&&S.read.detected||[]),'rug','curtains','lamp','wall art','plants','clutter'])].filter(n=>!/^(wall|floor|ceiling)$/i.test(n));
@@ -1761,7 +1773,8 @@ function buildObjChips(){
 function syncObjMode(){
   $$('#objMode .chip').forEach(x=>x.classList.toggle('sel',x.dataset.m===objMode));
   $('#repText').hidden = objMode!=='replace';
-  $('#rmGo').textContent = ({replace:'Replace it — 1 credit',move:'Move it — 1 credit',remove:'Remove it — 1 credit'})[objMode];
+  $('#rmGo').textContent = ({replace:'Replace it — 1 credit',move:'Rearrange it — 1 credit',remove:'Remove it — 1 credit'})[objMode];
+  $('#objWay').hidden=objMode!=='move';
   hintText();
 }
 $$('#objMode .chip').forEach(b=>b.onclick=()=>{ objMode=b.dataset.m; syncObjMode(); });
@@ -1775,8 +1788,10 @@ $('#rmGo').onclick=()=>{
     editRender('replace',{target:t,replacement:r,loc},'Replaced '+nm);
   } else if(objMode==='move'){
     if(!o){ toast('Tap an object on the photo first.'); return; }
-    if(!S.dest){ toast('Tap on the photo where it should go.'); return; }
-    editRender('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Moved '+nm);
+    if(way==='swap'){ if(!S.swap||S.swap===o){ toast('Tap the other object to swap with.'); return; }
+      editRender('move',{target:t,loc,dest:swapDest(S.swap)},'Swapped '+nm); }
+    else { if(!S.dest){ toast('Tap on the photo where it should go.'); return; }
+    editRender('move',{target:t,loc,dest:`about ${S.dest.x} percent from the left edge and ${S.dest.y} percent from the top`},'Rearranged '+nm); }
   } else editRender('remove',{target:t,loc},'Removed '+nm);
 };
 $('#stageGo').onclick=()=>editRender('stage',{density},'Furnished');
@@ -2232,7 +2247,8 @@ function buildTags(){
     if(k==='floor') t.push('Floor: '+String(v.label).replace(/ floor$/,''));
     else if(k==='remove') t.push('Removed: '+String(v.label).replace(/^Removed /,''));
     else if(k==='replace') t.push('Replaced: '+String(v.label).replace(/^Replaced /,''));
-    else if(k==='move') t.push('Moved: '+String(v.label).replace(/^Moved /,''));
+    else if(k==='move') t.push('Rearranged: '+String(v.label).replace(/^(Moved|Rearranged|Swapped) /,''));
+    
     else if(k==='stage') t.push('Furnished: added furniture');
     else if(k==='repaint') t.push('Wall: '+v.label);
   });

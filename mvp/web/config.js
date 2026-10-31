@@ -6,5 +6,5 @@ window.DECONOVA_CONFIG = {
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlZnhweWhxd3hqZ3BqZHJscWNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMzc4MzksImV4cCI6MjEwODkxMzgzOX0.xPYCfjjkZmD4Q6aah50UmJBkJVibnDp2phE40x5OvrI",
   REAL_RENDER: true,   // true once the generate function and GEMINI_API_KEY are deployed
   GOOGLE: true,         // true once Google sign-in is enabled in Supabase
-  START_CREDITS: 5
+  START_CREDITS: 100
 };
