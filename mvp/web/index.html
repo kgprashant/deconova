@@ -1413,7 +1413,7 @@ $('#go').onclick = async ()=>{
   if(REAL){
     try{
       const d=await callEdge('generate',{mode:'restyle', image:S.original.split(',')[1], style_id:s.id,
-        pack_id:S.pack, decor:[...S.decor], room:S.read, request_id:rid()});
+        pack_id:S.pack, decor:planDecor(), room:S.read, request_id:rid()});
       if(d && d.ok){ url=await fitTo('data:'+(d.mime||'image/png')+';base64,'+d.image, S.original); real=true; S.credits=d.credits_left; }
       else if(d){ toast(d.message||'The render did not finish.'); if(typeof d.credits_left==='number') S.credits=d.credits_left; }
     }catch(e){ toast(e.message||'The render did not finish.'); }
@@ -1822,6 +1822,13 @@ function aiOpen(){ $('#aiSheet').hidden=false; }
 function aiClose(){ $('#aiSheet').hidden=true; }
 $('#aiClose').onclick=aiClose;
 $('#aiSheet').addEventListener('click',e=>{ if(e.target.id==='aiSheet') aiClose(); });
+/* decor sent to the renderer: chosen extras plus every costed plan item, so each one is asked for by name */
+function shortName(n){ n=String(n||'').replace(/[^\p{L}\p{N} ,.'\-]/gu,'').trim(); if(n.length<=30) return n; const c=n.slice(0,30); const i=c.lastIndexOf(' '); return (i>8?c.slice(0,i):c).trim(); }
+function planDecor(){
+  const pl=S.pendingPlan, set=new Set(S.decor);
+  if(pl) pl.items.forEach(i=>{ const n=shortName(i.name); if(n) set.add(n); });
+  return [...set].slice(0,10);
+}
 let aiSel=1;
 function aiDraw(r){
   $('#aiBody').innerHTML=`<p class="credit">${esc(r.summary||'')} Tap a plan to select it, then use it. It sets the style and extras and makes the room over for 1 credit.</p><div class="aicards">`+
@@ -1852,9 +1859,11 @@ function costUI(){
   const tot=c.paint+c.items.filter(i=>i.on).reduce((a,i)=>a+i.cost,0);
   $('#costList').innerHTML=
     `<div class="costline" style="padding:6px 0"><span>&#128274; Paint &amp; wall finish <span class="soft">(base, fixed)</span></span><b>${inr(c.paint)}</b></div>`+
-    c.items.map((it,i)=>`<label class="chkrow"><input type="checkbox" data-ci="${i}"${it.on?' checked':''}><span class="costline" style="flex:1"><span>${esc(it.name)}${it.box?'':' <span class="soft" style="font-size:12px">(not located)</span>'}</span><b>${inr(it.cost)}</b></span></label>`).join('')+
+    c.items.map((it,i)=>`<label class="chkrow"><input type="checkbox" data-ci="${i}"${it.on?' checked':''}><span class="costline" style="flex:1"><span>${esc(it.name)}</span><b>${inr(it.cost)}</b></span></label>`).join('')+
     `<div class="costline costtot"><span>Total estimate</span><b>${inr(tot)}</b></div>`+
-    (c.locating?'<p class="credit">Finding the new objects in your photo…</p>':'');
+    (c.locating?'<p class="credit">Checking which items appear in your photo…</p>':'')+
+    ((c.omitted&&c.omitted.length)?`<p class="credit">Left out of the cost because the render did not show ${c.omitted.length===1?'it':'them'}: ${esc(c.omitted.join(', '))}.</p>`:'')+
+    (c.verified?'<p class="credit">Every item listed here is visible in the image.</p>':'');
   $$('#costList [data-ci]').forEach(x=>x.onchange=()=>{ c.items[+x.dataset.ci].on=x.checked; costUI(); });
   const L=$('#newObjs'); L.innerHTML='';
   if($('#showObjs').checked){
@@ -1873,6 +1882,8 @@ async function locateNew(url){
     if(S.cost===c && d&&d.ok){
       const bx=(d.result.boxes||[]);
       c.items.forEach((it,i)=>{ const m=bx.find(b=>String(b.name).toLowerCase()===it.name.toLowerCase())||bx[i]; it.box=(m&&m.box)||null; });
+      if(bx.length){ /* only items actually visible in the image stay in the cost */
+        c.omitted=c.items.filter(i=>!i.box).map(i=>i.name); c.items=c.items.filter(i=>i.box); c.verified=true; }
     }
   }catch(e){}
   c.locating=false; if(S.cost===c) costUI();
