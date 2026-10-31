@@ -391,6 +391,21 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .hero .lede{font-size:16.5px;color:var(--ink-soft);margin:14px 0 24px;max-width:30ch}
 .credit{font-size:12px;color:var(--ink-soft)}
 .votebox{border:1px solid var(--line,#ddd);border-radius:14px;padding:14px;margin-bottom:6px}
+.askai{position:absolute;right:10px;bottom:10px;z-index:6;border:0;border-radius:999px;padding:10px 16px;font:600 14px/1 inherit;font-family:inherit;
+  background:var(--signal);color:var(--signal-ink);box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+.askai:active{transform:scale(.97)}
+#aiSheet{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+#aiSheet[hidden]{display:none}
+#aiSheet .aibox{background:var(--panel,#fff);color:var(--ink,#111);width:min(720px,100%);max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 22px}
+.aihead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.aicards{display:grid;gap:12px;margin-top:10px}
+.aicard{border:1px solid rgba(128,128,128,.35);border-radius:14px;padding:12px}
+.aicard.rec{border-color:var(--signal);box-shadow:0 0 0 1px var(--signal) inset}
+.aitier{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+.aiprice{font-size:22px;font-weight:700;margin:2px 0 6px}
+.aisw{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:-2px;margin-right:6px;border:1px solid rgba(128,128,128,.5)}
+.aicard ul{margin:6px 0 8px;padding-left:18px;font-size:13.5px}
+.aicard .btn{margin-top:8px}
 </style>
 
 <div id="app">
@@ -455,7 +470,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
   <div class="pad" style="padding-top:8px">
    <div class="dgrid">
     <div class="dleft">
-    <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"><div id="identify" hidden><i class="spin"></i><span>Identifying objects…</span></div></div>
+    <div class="readwrap" id="readwrap"><img id="readimg" alt="The room you photographed"><button type="button" id="askAi" class="askai" aria-label="Ask AI for makeover options">&#10024; Ask AI</button><div id="identify" hidden><i class="spin"></i><span>Identifying objects…</span></div></div>
     <p class="credit" id="readnote" style="margin-top:10px">Reading the room…</p>
     <div class="selbar" id="selbar" hidden>
       <div id="selGrip" title="Drag to move" aria-label="Drag to move this panel"><i></i></div>
@@ -668,6 +683,10 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 <div class="toast" id="toast"></div>
 </div>
 
+<div id="aiSheet" hidden><div class="aibox" role="dialog" aria-label="Ask AI">
+  <div class="aihead"><b style="font-size:18px">&#10024; Ask AI</b><button class="back" type="button" id="aiClose">Close</button></div>
+  <div id="aiBody"></div>
+</div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script>
@@ -1772,6 +1791,46 @@ async function svVoteInit(){
     finally{ go.disabled=false; }
   };
 }
+
+/* --- Ask AI: three plans (lowest / optimized / best) --- */
+const AI_TIERS={lowest:['Lowest cost','Smallest spend that still changes the room'],optimized:['Optimized cost','Best value for the money'],best:['Best makeover','The strongest result, cost aside']};
+let aiPlans=null, aiKey=null;
+function aiOpen(){ $('#aiSheet').hidden=false; }
+function aiClose(){ $('#aiSheet').hidden=true; }
+$('#aiClose').onclick=aiClose;
+$('#aiSheet').addEventListener('click',e=>{ if(e.target.id==='aiSheet') aiClose(); });
+function aiDraw(r){
+  $('#aiBody').innerHTML=`<p class="credit">${esc(r.summary||'')} Choosing a plan sets the style and extras, then makes the room over for 1 credit.</p><div class="aicards">`+
+    r.plans.map((p,i)=>{ const t=AI_TIERS[p.tier]||[p.tier,''];
+      return `<div class="aicard${p.tier==='optimized'?' rec':''}"><div class="aitier">${esc(t[0])}${p.tier==='optimized'?' &middot; recommended':''}</div>
+      <div class="aiprice">${inr(p.total_cost)}</div><b>${esc(p.title||p.style_label)}</b> <span class="soft">&middot; ${esc(p.style_label)}</span>
+      ${p.wall?`<div style="margin-top:4px"><span class="aisw" style="background:${p.wall.hex}"></span>${esc(p.wall.name||'Wall')} walls</div>`:''}
+      ${p.decor.length?`<div class="chips" style="flex-wrap:wrap;margin-top:6px">${p.decor.map(d=>`<span class="chip sel" style="font-size:12px;padding:4px 9px">${esc(d)}</span>`).join('')}</div>`:''}
+      <ul>${p.changes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
+      <div class="soft" style="font-size:13px">${p.items.map(it=>`${esc(it.name)} ${inr(it.approx_cost)}`).join(' &middot; ')}</div>
+      ${p.why?`<p class="credit" style="margin-top:6px">${esc(p.why)}</p>`:''}
+      <button class="btn${p.tier==='optimized'?' sig':''}" data-use="${i}">Use this plan &mdash; 1 credit</button></div>`; }).join('')+'</div>';
+  $$('#aiBody [data-use]').forEach(b=>b.onclick=()=>aiUse(aiPlans[+b.dataset.use]));
+}
+async function aiUse(p){
+  if(S.credits<1){ toast('Out of credits.'); return; }
+  S.style=p.style_id; S.decor=new Set(p.decor||[]); S.aiWall=p.wall||null;
+  aiClose(); buildStyleUI();
+  $('#go').click();
+}
+$('#askAi').onclick=async ()=>{
+  if(!sb){ toast('Ask AI needs the connected version. See the README.'); return; }
+  aiOpen();
+  const key=S.original&&S.original.length+':'+S.pack;
+  if(aiPlans&&aiKey===key){ aiDraw(aiPlans); return; }
+  $('#aiBody').innerHTML='<p class="soft"><i class="spin" style="display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid rgba(128,128,128,.4);border-top-color:currentColor;animation:spn .8s linear infinite;vertical-align:-2px;margin-right:8px"></i>Studying your room and planning three options&hellip;</p>';
+  try{
+    const pk=PACKS.find(x=>x.id===S.pack);
+    const d=await callEdge('dn-plan',{image:S.original.split(',')[1], pack_note:(pk&&pk.id!=='none')?(pk.label+': '+pk.note):''});
+    if(!d||!d.ok){ $('#aiBody').innerHTML=`<p>${esc((d&&d.message)||'That did not work. Try again.')}</p><button class="btn" id="aiRetry">Try again</button>`; $('#aiRetry').onclick=()=>$('#askAi').onclick(); return; }
+    aiPlans=d.result.plans; aiKey=key; aiDraw(d.result);
+  }catch(e){ $('#aiBody').innerHTML='<p>Could not reach the server.</p><button class="btn" id="aiRetry">Try again</button>'; $('#aiRetry').onclick=()=>$('#askAi').onclick(); }
+};
 
 /* --- tabs --- */
 $$('.tabs button').forEach(b=>b.onclick=()=>{
