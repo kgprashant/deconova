@@ -116,10 +116,9 @@ pre.json{background:#0f0e0d;border:1px solid var(--line);border-radius:10px;padd
 
     <!-- TABLES -->
     <section id="t-tables" class="hide">
-      <div class="split">
-        <div class="card" style="padding:8px"><div class="tlist" id="tlist"></div></div>
+      <div>
         <div class="card" style="min-width:0">
-          <div class="row" style="margin-bottom:10px"><h3 style="margin:0;flex:1" id="tname">Pick a table</h3>
+          <div class="row" style="margin-bottom:10px"><select id="tsel" aria-label="Select table" style="max-width:340px;flex:1 1 240px"><option value="">Select a table…</option></select><span class="note" id="tname" style="flex:1"></span>
             <input type="search" id="tfilter" placeholder="Filter rows…" style="width:200px">
             <button class="btn ghost sm" id="tcsv">CSV</button></div>
           <div class="scroll" id="tdata"></div>
@@ -304,13 +303,12 @@ function fill30(rows,keys){ rows=rows||[]; const m={}; rows.forEach(r=>m[r.d]=r)
 
 /* ---------- tables ---------- */
 function drawTableList(){
-  const o=S.ov; const run=async()=>{ if(!S.ov) S.ov=await api('overview'); build() };
+  const o=S.ov; const run=async()=>{ if(!S.ov) S.ov=await api('overview'); build(); if(!S.table){const f=$('#tsel').options[1]; if(f){S.table=f.value;$('#tsel').value=S.table;S.off=0;loadTable()}} };
   const build=()=>{ const o=S.ov, cnt={}; (o.counts||[]).forEach(x=>cnt[x.t]=x.n); const meta={}; (o.tables||[]).forEach(t=>meta[t.sch+'.'+t.tbl]=t);
-    const names=Object.keys(cnt); $('#tlist').innerHTML=names.map(n=>`<button data-n="${n}" class="${S.table===n?'on':''}"><b>${n.replace('public.','')}${n==='auth.users'?'':''}</b><span>${num(cnt[n])}${meta[n]?' · '+bytes(meta[n].bytes):''}</span></button>`).join('');
-    $$('#tlist button').forEach(b=>b.onclick=()=>{S.table=b.dataset.n;S.off=0;$('#tfilter').value='';drawTableList();loadTable()}); };
+    $('#tsel').innerHTML='<option value="">Select a table…</option>'+Object.keys(cnt).map(n=>`<option value="${n}" ${S.table===n?'selected':''}>${n} — ${num(cnt[n])} rows${meta[n]?' · '+bytes(meta[n].bytes):''}</option>`).join(''); };
   run(); }
 async function loadTable(){
-  if(!S.table) return; const [schema,name]=S.table.split('.'); $('#tname').textContent=S.table; $('#tdata').innerHTML='<div style="padding:12px"><span class="spin"></span></div>';
+  if(!S.table) return; const [schema,name]=S.table.split('.'); $('#tname').textContent=''; $('#tdata').innerHTML='<div style="padding:12px"><span class="spin"></span></div>';
   try{ const j=await api('table',{schema,name,offset:S.off,limit:50,filter:$('#tfilter').value.trim()}); S.rows=j.rows;S.cols=j.columns.map(c=>c.c);
     $('#tdata').innerHTML=grid(j.rows,S.cols,{click:true}); $('#tpage').textContent=`${j.total?j.offset+1:0}–${Math.min(j.offset+j.limit,j.total)} of ${num(j.total)}`; S.total=j.total;
     $$('#tdata tr.click').forEach(tr=>tr.onclick=()=>{const p=$('#tjson');p.classList.remove('hide');p.textContent=JSON.stringify(S.rows[tr.dataset.i],null,2)});
@@ -319,6 +317,7 @@ async function loadTable(){
 }
 $('#tprev').onclick=()=>{S.off=Math.max(0,S.off-50);loadTable()};
 $('#tnext').onclick=()=>{if(S.off+50<(S.total||0)){S.off+=50;loadTable()}};
+$('#tsel').onchange=e=>{S.table=e.target.value||null;S.off=0;$('#tfilter').value='';if(S.table)loadTable();else{$('#tdata').innerHTML='';$('#tname').textContent=''}};
 let ft; $('#tfilter').oninput=()=>{clearTimeout(ft);ft=setTimeout(()=>{S.off=0;loadTable()},350)};
 $('#tcsv').onclick=()=>S.rows.length&&download((S.table||'table')+'.csv',csv(S.rows,S.cols),'text/csv');
 
